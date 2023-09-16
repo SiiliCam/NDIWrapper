@@ -12,8 +12,13 @@ endif()
 
 project ("ndiwrapper")
 
-add_subdirectory(external/CommonTypes)
-add_subdirectory(external/Logger)
+if (NOT TARGET Logger)
+  add_subdirectory(external/Logger)
+endif()
+
+if (NOT TARGET CommonTypes)
+  add_subdirectory(external/CommonTypes)
+endif()
 set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK")
 include_directories(${NDI_SDK_PATH}/Include)
 find_library(NDI_LIBRARY
