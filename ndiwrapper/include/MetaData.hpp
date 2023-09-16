@@ -3,6 +3,8 @@
 #include <string>
 #include <optional>
 
+#include "tinyxml2.h"
+
 struct BoundingBox {
 	struct {
 		int64_t x;
@@ -27,71 +29,99 @@ struct MetadataContainer {
 	std::optional<AspectRatio> aspectRatio;
 };
 
+
+using MetaDataCallback = std::function<void(MetadataContainer)>;
+
 namespace Metadata {
-	template<typename T>
-	inline void addToJson(boost::json::object& jsonObj, const T& data);
+    template<typename T>
+    inline void addToXML(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* root, const T& data);
 
-	template<>
-	inline void addToJson<BoundingBox>(boost::json::object& jsonObj, const BoundingBox& box) {
-		jsonObj["BoundingBox"] = {
-				{"start", {{"x", box.start.x}, {"y", box.start.y}}},
-				{"width", box.width},
-				{"height", box.height} };
-	}
+    template<>
+    inline void addToXML<BoundingBox>(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* root, const BoundingBox& box) {
+        auto element = doc.NewElement("BoundingBox");
+        auto start = doc.NewElement("start");
+        start->SetAttribute("x", box.start.x);
+        start->SetAttribute("y", box.start.y);
+        element->InsertEndChild(start);
+        element->SetAttribute("width", box.width);
+        element->SetAttribute("height", box.height);
+        root->InsertEndChild(element);
+    }
 
-	template<>
-	inline void addToJson<Zoom>(boost::json::object& jsonObj, const Zoom& zoom) {
-		jsonObj["Zoom"] = zoom;
-	}
+    template<>
+    inline void addToXML<Zoom>(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* root, const Zoom& zoom) {
+        auto element = doc.NewElement("Zoom");
+        element->SetText(zoom);
+        root->InsertEndChild(element);
+    }
 
-	template<>
-	inline void addToJson<SwitchCamera>(boost::json::object& jsonObj, const SwitchCamera& switchCamera) {
-		jsonObj["SwitchCamera"] = switchCamera;
-	}
+    template<>
+    inline void addToXML<SwitchCamera>(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* root, const SwitchCamera& switchCamera) {
+        auto element = doc.NewElement("SwitchCamera");
+        element->SetText(switchCamera);
+        root->InsertEndChild(element);
+    }
 
-	template<>
-	inline void addToJson<AspectRatio>(boost::json::object& jsonObj, const AspectRatio& aspectRatio) {
-		jsonObj["AspectRatio"] = { {"width", aspectRatio.width}, {"height", aspectRatio.height} };
-	}
+    template<>
+    inline void addToXML<AspectRatio>(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* root, const AspectRatio& aspectRatio) {
+        auto element = doc.NewElement("AspectRatio");
+        element->SetAttribute("width", aspectRatio.width);
+        element->SetAttribute("height", aspectRatio.height);
+        root->InsertEndChild(element);
+    }
 
-	template<typename... Args>
-	inline std::string encode(const Args&... args) {
-		boost::json::object jsonObj;
-		(addToJson(jsonObj, args), ...);
-		return boost::json::serialize(jsonObj);
-	}
+    template<typename... Args>
+    inline std::string encode(const Args&... args) {
+        tinyxml2::XMLDocument doc;
+        auto declaration = doc.NewDeclaration();
+        doc.InsertFirstChild(declaration);
+        auto root = doc.NewElement("root");
+        doc.InsertEndChild(root);
 
-	inline MetadataContainer decode(const std::string& jsonStr) {
-		MetadataContainer container;
-		boost::json::object jsonObj = boost::json::parse(jsonStr).as_object();
+        (addToXML(doc, root, args), ...);
 
-		// Note: Explicitly cast to boost::json::object
-		if (jsonObj.contains("BoundingBox")) {
-			boost::json::object boxObj = jsonObj["BoundingBox"].as_object();
-			BoundingBox box;
-			box.start.x = boxObj["start"].as_object()["x"].as_int64();
-			box.start.y = boxObj["start"].as_object()["y"].as_int64();
-			box.width = boxObj["width"].as_int64();
-			box.height = boxObj["height"].as_int64();
-			container.boundingBox = box;
-		}
+        tinyxml2::XMLPrinter printer;
+        doc.Print(&printer);
+        return printer.CStr();
+    }
 
-		if (jsonObj.contains("Zoom")) {
-			container.zoom = jsonObj["Zoom"].as_double();
-		}
+    inline MetadataContainer decode(const std::string& xmlStr) {
+        MetadataContainer container;
+        tinyxml2::XMLDocument doc;
+        doc.Parse(xmlStr.c_str());
 
-		if (jsonObj.contains("SwitchCamera")) {
-			container.switchCamera = jsonObj["SwitchCamera"].as_bool();
-		}
+        auto root = doc.FirstChildElement("root");
+        if (root) {
+            auto bboxElement = root->FirstChildElement("BoundingBox");
+            if (bboxElement) {
+                BoundingBox box;
+                auto start = bboxElement->FirstChildElement("start");
+                box.start.x = start->IntAttribute("x");
+                box.start.y = start->IntAttribute("y");
+                box.width = bboxElement->IntAttribute("width");
+                box.height = bboxElement->IntAttribute("height");
+                container.boundingBox = box;
+            }
 
-		if (jsonObj.contains("AspectRatio")) {
-			boost::json::object arObj = jsonObj["AspectRatio"].as_object();
-			AspectRatio ar;
-			ar.width = arObj["width"].as_int64();
-			ar.height = arObj["height"].as_int64();
-			container.aspectRatio = ar;
-		}
+            auto zoomElement = root->FirstChildElement("Zoom");
+            if (zoomElement) {
+                container.zoom = zoomElement->DoubleText();
+            }
 
-		return container;
-	}
+            auto switchCameraElement = root->FirstChildElement("SwitchCamera");
+            if (switchCameraElement) {
+                container.switchCamera = switchCameraElement->BoolText();
+            }
+
+            auto aspectRatioElement = root->FirstChildElement("AspectRatio");
+            if (aspectRatioElement) {
+                AspectRatio ar;
+                ar.width = aspectRatioElement->IntAttribute("width");
+                ar.height = aspectRatioElement->IntAttribute("height");
+                container.aspectRatio = ar;
+            }
+        }
+
+        return container;
+    }
 }

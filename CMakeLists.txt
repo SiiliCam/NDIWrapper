@@ -19,6 +19,9 @@ endif()
 if (NOT TARGET CommonTypes)
   add_subdirectory(external/CommonTypes)
 endif()
+
+add_subdirectory(external/tinyxml2)
+
 set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK")
 include_directories(${NDI_SDK_PATH}/Include)
 find_library(NDI_LIBRARY

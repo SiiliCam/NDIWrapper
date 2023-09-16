@@ -16,7 +16,6 @@ using namespace common_types;
 
 using FrameCallback = std::function<void(Image)>;
 using NDISourceCallback = std::function<void(std::string)>;
-using MetaDataCallback = std::function<void(MetadataContainer)>;
 
 class NDIReceiver {
 public:
@@ -48,9 +47,28 @@ public:
     void resetSources();
     void metadataThreadLoop();
 
-    // Template function for sending metadata
     template<typename... Args>
-    void sendMetadata(const Args&... args);
+    void sendMetadata(const Args&... args) {
+        std::string encodedMetadata = Metadata::encode(args...);
+        NDIlib_metadata_frame_t metadata;
+        metadata.length = static_cast<int>(encodedMetadata.size()) + 1;  // +1 for null terminator
+        metadata.p_data = new char[metadata.length];
+        std::strcpy(metadata.p_data, encodedMetadata.c_str());
+
+        bool success;
+
+        // Call your actual method to send metadata here
+        {
+            std::lock_guard<std::mutex> lock(pndiMutex_);
+
+            success = NDIlib_recv_send_metadata(pNDI_recv_, &metadata);  // Assume metadataSend can accept std::string
+        }
+        delete[] metadata.p_data;
+
+        if (!success) {
+            throw std::runtime_error("Failed to send metadata");
+        }
+    }
 
 private:
     void updateSources();
@@ -84,9 +102,9 @@ private:
     std::mutex ndiSourceCallbackMutex_;
     std::mutex metadtaCallbackMutex_;
 
-    std::atomic<bool> _findGroup;
     NDIlib_recv_instance_t pNDI_recv_ = nullptr;
 
+    std::atomic<bool> _findGroup;
     std::string groupToFind_;
 };
 

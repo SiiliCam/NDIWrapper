@@ -1,5 +1,5 @@
 # Specify the required source files
-set(SOURCES "src/NDIReceiver.cpp" "src/ThreadPool.cpp")
+set(SOURCES "src/NDIReceiver.cpp" "src/ThreadPool.cpp" "src/NDISender.cpp")
 
 # Create the NDIReceiver library
 add_library(NDIWrapper ${SOURCES})
@@ -20,6 +20,7 @@ target_link_libraries(NDIWrapper
         Boost::json
         CommonTypes
         ${NDI_LIBRARY}
+        tinyxml2
 )
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

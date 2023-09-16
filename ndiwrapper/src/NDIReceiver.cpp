@@ -73,10 +73,10 @@ void NDIReceiver::stopMetadataListening() {
 	}
 }
 void NDIReceiver::startMetadataListening() {
-	if (isSourceFindingRunning_.load() == false) {
+	if (metadatalistenerrunning_.load() == false) {
 
-		metadatalistenerrunning_ = true;
-		metadataThread_ = std::thread(&NDIReceiver::updateSources, this);
+		metadatalistenerrunning_.store(true);
+		metadataThread_ = std::thread(&NDIReceiver::metadataThreadLoop, this);
 	}
 	else {
 		Logger::log_warn("metadata listening already running");
@@ -85,12 +85,15 @@ void NDIReceiver::startMetadataListening() {
 }
 
 void NDIReceiver::start() {
+
 	startSourceFinding();
 	startFrameGeneration();
+	startMetadataListening();
 }
 
 void NDIReceiver::stop() {
-	Logger::log_info("stopping ndiwrapper");
+	Logger::log_info("stopping receiver");
+	stopMetadataListening();
 	stopSourceFinding();
 	stopFrameGeneration();
 
@@ -212,34 +215,37 @@ void NDIReceiver::generateFrames() {
 			// Check if the selected source has changed
 
 			// Capture video frames from the receiver
-			NDIlib_video_frame_v2_t video_frame;
 			{
-				std::lock_guard<std::mutex> lock(pndiMutex_);
-				NDIlib_recv_capture_v2(pNDI_recv_, &video_frame, nullptr, nullptr, 1000); // 5-second timeout
-			}
-			if (video_frame.p_data) {
-				// Convert the NDI frame to your desired format and store in currentFrame_
-				Image frame;
-				frame.width = video_frame.xres;
-				frame.height = video_frame.yres;
-				frame.channels = 4; // Assuming RGBA format
-				frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
 
-				{
-					std::lock_guard<std::mutex> lock(frameMutex_);
-					currentFrame_ = frame;
+				NDIlib_video_frame_v2_t video_frame;
+				std::lock_guard<std::mutex> lock(pndiMutex_);
+				auto type = NDIlib_recv_capture_v2(pNDI_recv_, &video_frame, nullptr, nullptr, 1000); // 5-second timeout
+				if (type == NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
+					Logger::log_error("received metadata in generateframes ");
 				}
-				{
-					std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
-					for (const auto& callback : _frameCallbacks) {
-						Image frameCopy = frame;  // Ensure you make a deep copy if needed
-						threadPool_.enqueue([=]() { callback(frameCopy); });
-					}
-				}
-				// Free the video frame after using it
-				{
-					std::lock_guard<std::mutex> lock(pndiMutex_);
+
+				if (video_frame.p_data) {
+					// Convert the NDI frame to your desired format and store in currentFrame_
+					Image frame;
+					frame.width = video_frame.xres;
+					frame.height = video_frame.yres;
+					frame.channels = 4; // Assuming RGBA format
+					frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
 					NDIlib_recv_free_video_v2(pNDI_recv_, &video_frame);
+					{
+						std::lock_guard<std::mutex> lock(frameMutex_);
+						currentFrame_ = frame;
+					}
+					{
+						std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
+						for (const auto& callback : _frameCallbacks) {
+							Image frameCopy = frame;  // Ensure you make a deep copy if needed
+							threadPool_.enqueue([=]() { callback(frameCopy); });
+						}
+					}
+					// Free the video frame after using it
+
+
 				}
 			}
 
@@ -254,72 +260,55 @@ void NDIReceiver::generateFrames() {
 void NDIReceiver::metadataThreadLoop() {
 	try {
 		while (metadatalistenerrunning_.load()) {
-			bool isLegit = false;
-			NDIlib_metadata_frame_t metaDataFrame;
 
+
+			
 			// Step 1: Lock and validate pNDI_recv_
 			{
+				NDIlib_metadata_frame_t metaDataFrame;
 				std::lock_guard<std::mutex> lock(pndiMutex_);
-				isLegit = !!pNDI_recv_;
+				bool isLegit = !!pNDI_recv_;
 
 				if (isLegit) {
-					NDIlib_recv_capture_v2(pNDI_recv_, NULL, NULL, &metaDataFrame, 100);  // Assume metadataRecv populates frame
+					NDIlib_frame_type_e type;
+					{
+						std::lock_guard<std::mutex> lock(pndiMutex_);
+						type = NDIlib_recv_capture_v2(pNDI_recv_, nullptr, nullptr, &metaDataFrame, 0);  // Assume metadataRecv populates frame
+					}
+					//Logger::log_info("Type of frame received: ", type);
+					if (type != NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
+						std::this_thread::sleep_for(std::chrono::milliseconds(10));
+						continue;
+					}
 				}
-			}
-
-			// Step 2: Sleep if pNDI_recv_ is not legit
-			if (!isLegit) {
-				std::this_thread::sleep_for(std::chrono::seconds(1));
-				continue;
-			}
-
-			// Step 3: Parse the metadata
-			MetadataContainer container;
-			try {
-
-				container = Metadata::decode(metaDataFrame.p_data);  // Assuming frame.data is std::string
-				// Step 4: Enqueue the parsed metadata for processing
-				std::lock_guard<std::mutex> lock(metadtaCallbackMutex_);
-				for (const auto& callback : _metadataCallbacks) {
-					MetadataContainer containerCopy = container;  // Deep copy if needed
-					threadPool_.enqueue([=]() { callback(containerCopy); });
+				else {
+					std::this_thread::sleep_for(std::chrono::milliseconds(10));
+					continue;
 				}
-			}
-			catch (const std::exception& e) {
-				Logger::log_error("could not decode metadata", e.what());
-			}
-			{
-				std::lock_guard<std::mutex> lock(pndiMutex_);
+				try {
+					if (metaDataFrame.p_data) {
+						//Logger::log_info("data received:", metaDataFrame.p_data);
+						MetadataContainer container = Metadata::decode(metaDataFrame.p_data);  // Assuming frame.data is std::string
+						// Step 4: Enqueue the parsed metadata for processing
+						std::lock_guard<std::mutex> lock(metadtaCallbackMutex_);
+						for (const auto& callback : _metadataCallbacks) {
+							MetadataContainer containerCopy = container;  // Deep copy if needed
+							threadPool_.enqueue([=]() { callback(containerCopy); });
+						}
+					}
+				}
+				catch (const std::exception& e) {
+					Logger::log_error("could not decode metadata", e.what());
+				}
 				NDIlib_recv_free_metadata(pNDI_recv_, &metaDataFrame);
 			}
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
+
 	}
 	catch (const std::exception& e) {
 		Logger::log_error("Could not handle metadata", e.what());
 	}
 }
 
-template<typename... Args>
-inline void NDIReceiver::sendMetadata(const Args&... args) {
-	std::string encodedMetadata = Metadata::encode(args...);
-	NDIlib_metadata_frame_t metadata;
-	metadata.length = static_cast<int>(encodedMetadata.size()) + 1;  // +1 for null terminator
-	metadata.p_data = new char[metadata.length];
-	std::strcpy(metadata.p_data, encodedMetadata.c_str());
-
-	bool success;
-
-	// Call your actual method to send metadata here
-	{
-		std::lock_guard<std::mutex> lock(pndiMutex_);
-
-		success = NDIlib_recv_send_metadata(pNDI_recv_, &metadata);  // Assume metadataSend can accept std::string
-	}
-	delete[] metadata.p_data;
-
-	if (!success) {
-		throw std::runtime_error("Failed to send metadata");
-	}
-}
