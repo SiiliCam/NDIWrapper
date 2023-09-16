@@ -1,0 +1,6 @@
+[submodule "external/CommonTypes"]
+	path = external/CommonTypes
+	url = C:/Users/Simo/source/repos/lib/CommonTypes
+[submodule "external/Logger"]
+	path = external/Logger
+	url = C:/Users/Simo/source/repos/lib/Logger
