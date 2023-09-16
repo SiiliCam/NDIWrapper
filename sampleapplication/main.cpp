@@ -6,6 +6,18 @@
 #include <tuple>
 #include "NDISender.hpp"
 #include "MetaData.hpp"
+#include <random>
+
+int getRandomNumber(int length) {
+    // Initialize a random number engine
+    std::default_random_engine engine(static_cast<unsigned int>(std::chrono::steady_clock::now().time_since_epoch().count()));
+
+    // Initialize a distribution from 0 to length
+    std::uniform_int_distribution<int> distribution(0, length-1);
+
+    // Generate and return a random number
+    return distribution(engine);
+}
 
 std::tuple<double, double, double> calculateRGBMedians(const Image& image) {
     std::vector<uint8_t> redData, greenData, blueData;
@@ -67,7 +79,6 @@ int main() {
 	// sets the found source as current
 	receiver.addNDISourceCallback([&receiver](std::string source) -> void {
 		Logger::log_info("found source", source);
-		receiver.setOutput(source);
 		});
 	receiver.start();
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -88,7 +99,26 @@ int main() {
             Logger::log_info("RECEIVER got switchCamera: ", container.switchCamera.value());
         }
         });
+    std::thread outputSwitcher([&]() -> void {
+        while (true) {
 
+            auto outputs = receiver.getCurrentSources();
+            if (outputs.size() < 2) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(400));
+                continue;
+            }
+            auto output = outputs.at(getRandomNumber(outputs.size()));
+            receiver.setOutput(output);
+            std::this_thread::sleep_for(std::chrono::milliseconds(400));
+        }
+        });
+    outputSwitcher.detach();
+    std::vector<NDISender*> senders;
+
+    for (int i = 0; i < 20; i++) {
+        NDISender* sender = new NDISender{ "mymdnsname" + std::to_string(i), "Testing" };
+        senders.push_back(sender);
+    }
     NDISender sender("mymdnsname", "Testing");
     sender.addMetadataCallback([](MetadataContainer container) -> void {
         if (container.zoom.has_value()) {
@@ -107,20 +137,22 @@ int main() {
             Logger::log_info("SENDER got switchCamera: ", container.switchCamera.value());
         }
         });
-    sender.start();
+
+    senders[0]->start();
     std::this_thread::sleep_for(std::chrono::seconds(5));
     BoundingBox box;
     box.start.y = 200;
     box.start.x = 250;
     box.width = 400;
     box.height = 200;
-    sender.sendMetadata(box);
+    senders[0]->sendMetadata(box);
 
     Zoom zoom{4.2f};
     receiver.sendMetadata(zoom);
 
     AspectRatio aspect{ 16,9 };
     receiver.sendMetadata(aspect);
+
     std::thread t([&]() -> void {
 
         int i = 0;
@@ -135,26 +167,30 @@ int main() {
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }});
-    std::thread senderThread([&]() {
 
-        // Generate a 200x200 red image with RGBA format
-        Image img = generateRGBAImage(200, 200, 255, 0, 0);
+    for (auto& sender : senders) {
+        std::thread senderThread([&]() {
 
-        // stride = width * channels
-        int stride = img.width * img.channels;
-        int i = 0;
-        while (true) {
-            BoundingBox box2;
-            box2.start.y = 200;
-            box2.start.x = 250;
-            box2.width = 400;
-            box2.height = 200;
-            sender.sendMetadata(box2);
-            sender.feedFrame(img, stride, NDIlib_FourCC_video_type_RGBA);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-        });
+            // Generate a 200x200 red image with RGBA format
+            Image img = generateRGBAImage(200, 200, 255, 0, 0);
+
+            // stride = width * channels
+            int stride = img.width * img.channels;
+            int i = 0;
+            while (true) {
+                BoundingBox box2;
+                box2.start.y = i%200+200;
+                box2.start.x = 250;
+                box2.width = 400;
+                box2.height = 200;
+                sender->sendMetadata(box2);
+                sender->feedFrame(img, stride, NDIlib_FourCC_video_type_RGBA);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            });
+        senderThread.detach();
+    }
+    
     t.join();
-    senderThread.join();
 	return 0;
 }

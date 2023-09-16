@@ -78,56 +78,49 @@ void NDISender::addMetadataCallback(MetaDataCallback callback) {
 void NDISender::metadataThreadLoop() {
 	try {
 		while (metadatalistenerrunning_.load()) {
-			bool isLegit = false;
-			NDIlib_metadata_frame_t metaDataFrame;
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 			// Step 1: Lock and validate pNDI_recv_
-			{	
-				{
-					std::lock_guard<std::mutex> lock(pndiMutex_);
-					isLegit = !!pNDI_send_;
-				}
+			{
+				NDIlib_metadata_frame_t metaDataFrame;
+				std::lock_guard<std::mutex> lock(pndiMutex_);
+				bool isLegit = !!pNDI_send_;
+
 				if (isLegit) {
 					NDIlib_frame_type_e type;
 					{
-						std::lock_guard<std::mutex> lock(pndiMutex_);
-						type = NDIlib_send_capture(pNDI_send_, &metaDataFrame, 100);  // Assume metadataRecv populates frame
+						type = NDIlib_send_capture(pNDI_send_, &metaDataFrame, 0);  // Assume metadataRecv populates frame
 					}
 					if (type != NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
-						std::this_thread::sleep_for(std::chrono::milliseconds(10));
 						continue;
 					}
 				}
 				else {
-					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 					continue;
 				}
 
-			}
 
-			// Step 3: Parse the metadata
-			MetadataContainer container;
-			try {
-				if (metaDataFrame.p_data) {
-					container = Metadata::decode(metaDataFrame.p_data);  // Assuming frame.data is std::string
-					// Step 4: Enqueue the parsed metadata for processing
-					std::lock_guard<std::mutex> lock(metadtaCallbackMutex_);
-					for (const auto& callback : _metadataCallbacks) {
-						MetadataContainer containerCopy = container;  // Deep copy if needed
-						threadPool_.enqueue([=]() { callback(containerCopy); });
-					}
-					{
-						std::lock_guard<std::mutex> lock(pndiMutex_);
+				// Step 3: Parse the metadata
+				MetadataContainer container;
+				try {
+					if (metaDataFrame.p_data) {
+						container = Metadata::decode(metaDataFrame.p_data);  // Assuming frame.data is std::string
+						// Step 4: Enqueue the parsed metadata for processing
+						std::lock_guard<std::mutex> lock(metadtaCallbackMutex_);
+						for (const auto& callback : _metadataCallbacks) {
+							MetadataContainer containerCopy = container;  // Deep copy if needed
+							threadPool_.enqueue([=]() { callback(containerCopy); });
+						}
 						NDIlib_send_free_metadata(pNDI_send_, &metaDataFrame);
 					}
 				}
-			}
-			catch (const std::exception& e) {
-				Logger::log_error("could not decode metadata", e.what());
+				catch (const std::exception& e) {
+					Logger::log_error("could not decode metadata", e.what());
+				}
 			}
 
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
 	catch (const std::exception& e) {

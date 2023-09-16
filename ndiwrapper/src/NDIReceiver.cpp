@@ -262,6 +262,7 @@ void NDIReceiver::metadataThreadLoop() {
 		while (metadatalistenerrunning_.load()) {
 
 
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			
 			// Step 1: Lock and validate pNDI_recv_
 			{
@@ -272,17 +273,14 @@ void NDIReceiver::metadataThreadLoop() {
 				if (isLegit) {
 					NDIlib_frame_type_e type;
 					{
-						std::lock_guard<std::mutex> lock(pndiMutex_);
 						type = NDIlib_recv_capture_v2(pNDI_recv_, nullptr, nullptr, &metaDataFrame, 0);  // Assume metadataRecv populates frame
 					}
 					//Logger::log_info("Type of frame received: ", type);
 					if (type != NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
-						std::this_thread::sleep_for(std::chrono::milliseconds(10));
 						continue;
 					}
 				}
 				else {
-					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 					continue;
 				}
 				try {
@@ -295,15 +293,15 @@ void NDIReceiver::metadataThreadLoop() {
 							MetadataContainer containerCopy = container;  // Deep copy if needed
 							threadPool_.enqueue([=]() { callback(containerCopy); });
 						}
+
+						NDIlib_recv_free_metadata(pNDI_recv_, &metaDataFrame);
 					}
 				}
 				catch (const std::exception& e) {
 					Logger::log_error("could not decode metadata", e.what());
 				}
-				NDIlib_recv_free_metadata(pNDI_recv_, &metaDataFrame);
 			}
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 
 	}
