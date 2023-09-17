@@ -4,7 +4,7 @@ set(SOURCES "src/NDIReceiver.cpp" "src/ThreadPool.cpp" "src/NDISender.cpp")
 # Create the NDIReceiver library
 add_library(NDIWrapper ${SOURCES})
 
-include_directories(${NDI_SDK_PATH}/Include)
+target_include_directories(NDIWrapper PUBLIC ${NDI_SDK_PATH}/Include)
 
 # Link Boost libraries to NDIReceiver
 target_link_libraries(NDIWrapper 
@@ -26,5 +26,10 @@ target_include_directories(NDIWrapper PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+add_custom_command(TARGET NDIWrapper POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+  "C:/Program Files/NDI/NDI 5 Runtime/v5/Processing.NDI.Lib.x64.dll"
+  $<TARGET_FILE_DIR:NDIWrapper>
+)
 
 add_dependencies(NDIWrapper Logger)
