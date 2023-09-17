@@ -4,11 +4,6 @@ set(SOURCES "src/NDIReceiver.cpp" "src/ThreadPool.cpp" "src/NDISender.cpp")
 # Create the NDIReceiver library
 add_library(NDIWrapper ${SOURCES})
 
-set(Boost_DIR "C:/local/boost_1_83_0/stage/lib/cmake/Boost-1.83.0/")
-SET(Boost_ADDITIONAL_VERSIONS 1.83.0)
-find_package(Boost 1.83.0 REQUIRED COMPONENTS system json)
-
-set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK")
 include_directories(${NDI_SDK_PATH}/Include)
 
 # Link Boost libraries to NDIReceiver
@@ -16,8 +11,6 @@ target_link_libraries(NDIWrapper
     PUBLIC 
         ${CMAKE_THREAD_LIBS_INIT} 
         Logger 
-        Boost::system
-        Boost::json
         CommonTypes
         ${NDI_LIBRARY}
         tinyxml2

@@ -1,8 +1,7 @@
 #pragma once
-#include <boost/json.hpp>
 #include <string>
 #include <optional>
-
+#include <functional>
 #include "tinyxml2.h"
 
 struct BoundingBox {
