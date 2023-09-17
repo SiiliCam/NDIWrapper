@@ -22,12 +22,36 @@ endif()
 
 add_subdirectory(external/tinyxml2)
 
-set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK")
-include_directories(${NDI_SDK_PATH}/Include)
-find_library(NDI_LIBRARY
-  NAMES Processing.NDI.Lib.x64
-  PATHS ${NDI_SDK_PATH}/Lib/x64
-)
+# Conditional NDI SDK Path and Library
+if (ANDROID)
+  set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK (Android)")
+  include_directories(${NDI_SDK_PATH}/Include)
+
+  if(ANDROID_ABI STREQUAL "armeabi-v7a")
+      set(NDI_LIBRARY_PATH "${NDI_SDK_PATH}/Lib/armeabi-v7a")
+      set(NDI_LIBRARY "${NDI_SDK_PATH}/Lib/armeabi-v7a/libndi.so")
+  elseif(ANDROID_ABI STREQUAL "arm64-v8a")
+      set(NDI_LIBRARY_PATH "${NDI_SDK_PATH}/Lib/arm64-v8a")
+      set(NDI_LIBRARY "${NDI_SDK_PATH}/Lib/arm64-v8a/libndi.so")
+  elseif(ANDROID_ABI STREQUAL "x86_64")
+      set(NDI_LIBRARY_PATH "${NDI_SDK_PATH}/Lib/x86_64")
+      set(NDI_LIBRARY "${NDI_SDK_PATH}/Lib/x86_64/libndi.so")
+  elseif(ANDROID_ABI STREQUAL "x86")
+      set(NDI_LIBRARY_PATH "${NDI_SDK_PATH}/Lib/x86")
+      set(NDI_LIBRARY "${NDI_SDK_PATH}/Lib/x86/libndi.so")
+  endif()
+
+else()
+  set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK")
+  include_directories(${NDI_SDK_PATH}/Include)
+  
+  set(NDI_LIBRARY_PATH "${NDI_SDK_PATH}/Lib/x64")
+  
+  find_library(NDI_LIBRARY
+    NAMES Processing.NDI.Lib.x64
+    PATHS ${NDI_SDK_PATH}/Lib/x64
+  )
+endif()
 
 find_package(Threads REQUIRED)
 
