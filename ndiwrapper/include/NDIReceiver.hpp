@@ -10,6 +10,7 @@
 #include "commontypes.hpp"
 #include "ThreadPool.hpp"
 #include "MetaData.hpp"
+#include "Logger.hpp"
 
 using namespace common_types;
 
@@ -66,7 +67,7 @@ public:
         delete[] metadata.p_data;
 
         if (!success) {
-            throw std::runtime_error("Failed to send metadata");
+            Logger::log_error("failed to send metadata");
         }
     }
 
