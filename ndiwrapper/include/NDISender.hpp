@@ -15,7 +15,7 @@ class NDISender {
 public:
 	NDISender(const std::string& name, const std::string& group = "");
 	~NDISender();
-	void feedFrame(Image& image, int stride, NDIlib_FourCC_video_type_e videoType = NDIlib_FourCC_video_type_NV12);
+	void feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType = NDIlib_FourCC_video_type_NV12);
 	void addMetadataCallback(MetaDataCallback callback);
 
 	void metadataThreadLoop();

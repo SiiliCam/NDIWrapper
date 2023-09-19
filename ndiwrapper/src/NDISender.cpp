@@ -53,7 +53,7 @@ void NDISender::stop() {
 	}
 }
 
-void NDISender::feedFrame(Image& image, int stride, NDIlib_FourCC_video_type_e videoType) {
+void NDISender::feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType) {
 	if (!pNDI_send_) {
 		Logger::log_error("Pndi send not initialized");
 	}
@@ -62,7 +62,7 @@ void NDISender::feedFrame(Image& image, int stride, NDIlib_FourCC_video_type_e v
 	NDI_video_frame.yres = image.height; // Assuming Image has a height member
 	NDI_video_frame.FourCC = videoType;
 	NDI_video_frame.p_data = image.data.data(); // Assuming Image has a data member
-	NDI_video_frame.line_stride_in_bytes = stride;
+	NDI_video_frame.line_stride_in_bytes = image.stride;
 
 	{
 		std::lock_guard<std::mutex> lock(pndiMutex_);

@@ -173,9 +173,9 @@ int main() {
 
             // Generate a 200x200 red image with RGBA format
             Image img = generateRGBAImage(200, 200, 255, 0, 0);
-
+            img.stride = img.width * img.channels;
             // stride = width * channels
-            int stride = img.width * img.channels;
+
             int i = 0;
             while (true) {
                 BoundingBox box2;
@@ -184,7 +184,7 @@ int main() {
                 box2.width = 400;
                 box2.height = 200;
                 sender->sendMetadata(box2);
-                sender->feedFrame(img, stride, NDIlib_FourCC_video_type_RGBA);
+                sender->feedFrame(img, NDIlib_FourCC_video_type_RGBA);
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             });
