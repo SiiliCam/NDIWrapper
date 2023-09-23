@@ -7,8 +7,18 @@
 
 #include "Logger.hpp"
 
-NDISender::NDISender(const std::string& name, const std::string& group) : threadPool_(2), metadatalistenerrunning_(false) {
-	NDIlib_initialize();
+NDISender::NDISender(const std::string& name, const std::string& group) :
+	NDIBase(
+		[this](NDIlib_metadata_frame_t& metadataFrame) {
+			return NDIlib_send_capture(pNDIInstance_, &metadataFrame, 0);
+		},
+		[this](NDIlib_metadata_frame_t& metadataFrame) {
+			NDIlib_send_send_metadata(pNDIInstance_, &metadataFrame);
+		},
+		[this](NDIlib_metadata_frame_t& metadataFrame) {
+			NDIlib_send_free_metadata(pNDIInstance_, &metadataFrame);
+		}
+	) {
 	NDIlib_send_create_t NDI_send_create_desc;
 	NDI_send_create_desc.p_ndi_name = name.c_str();
 	if (group.length() > 0) {
@@ -19,8 +29,8 @@ NDISender::NDISender(const std::string& name, const std::string& group) : thread
 
 	{
 		std::lock_guard<std::mutex> lock(pndiMutex_);
-		pNDI_send_ = NDIlib_send_create(&NDI_send_create_desc);
-		if (!pNDI_send_) {
+		pNDIInstance_ = NDIlib_send_create(&NDI_send_create_desc);
+		if (!pNDIInstance_) {
 			throw std::runtime_error("Failed to create NDI send instance");
 		}
 	}
@@ -29,32 +39,23 @@ NDISender::NDISender(const std::string& name, const std::string& group) : thread
 NDISender::~NDISender() {
 	stop();
 	std::lock_guard<std::mutex> lock(pndiMutex_);
-	if (pNDI_send_) {
-		NDIlib_send_destroy(pNDI_send_);
-		pNDI_send_ = nullptr;
+	if (pNDIInstance_) {
+		NDIlib_send_destroy(pNDIInstance_);
+		pNDIInstance_ = nullptr;
 	}
-	NDIlib_destroy();
 }
 
 void NDISender::start() {
-	if (metadatalistenerrunning_.load() == false)
-	{
-		metadatalistenerrunning_ = true;
-		metadataThread_ = std::thread(&NDISender::metadataThreadLoop, this);
-	}
-	else {
-		Logger::log_error("metadatathread already running");
-	}
+	startMetadataListening();
+
 }
 void NDISender::stop() {
-	metadatalistenerrunning_ = false;
-	if (metadataThread_.joinable()) {
-		metadataThread_.join();
-	}
+	stopMetadataListening();
+
 }
 
 void NDISender::feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType) {
-	if (!pNDI_send_) {
+	if (!pNDIInstance_) {
 		Logger::log_error("Pndi send not initialized");
 	}
 	NDIlib_video_frame_v2_t NDI_video_frame;
@@ -66,65 +67,6 @@ void NDISender::feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType) {
 
 	{
 		std::lock_guard<std::mutex> lock(pndiMutex_);
-		NDIlib_send_send_video_v2(pNDI_send_, &NDI_video_frame);
+		NDIlib_send_send_video_v2(pNDIInstance_, &NDI_video_frame);
 	}
 }
-
-void NDISender::addMetadataCallback(MetaDataCallback callback) {
-	std::lock_guard<std::mutex> lock(metadtaCallbackMutex_);
-	_metadataCallbacks.push_back(callback);
-}
-
-void NDISender::metadataThreadLoop() {
-	try {
-		while (metadatalistenerrunning_.load()) {
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-			// Step 1: Lock and validate pNDI_recv_
-			{
-				NDIlib_metadata_frame_t metaDataFrame;
-				std::lock_guard<std::mutex> lock(pndiMutex_);
-				bool isLegit = !!pNDI_send_;
-
-				if (isLegit) {
-					NDIlib_frame_type_e type;
-					{
-						type = NDIlib_send_capture(pNDI_send_, &metaDataFrame, 0);  // Assume metadataRecv populates frame
-					}
-					if (type != NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
-						continue;
-					}
-				}
-				else {
-					continue;
-				}
-
-
-				// Step 3: Parse the metadata
-				MetadataContainer container;
-				try {
-					if (metaDataFrame.p_data) {
-						container = Metadata::decode(metaDataFrame.p_data);  // Assuming frame.data is std::string
-						// Step 4: Enqueue the parsed metadata for processing
-						std::lock_guard<std::mutex> lock(metadtaCallbackMutex_);
-						for (const auto& callback : _metadataCallbacks) {
-							MetadataContainer containerCopy = container;  // Deep copy if needed
-							threadPool_.enqueue([=]() { callback(containerCopy); });
-						}
-						NDIlib_send_free_metadata(pNDI_send_, &metaDataFrame);
-					}
-				}
-				catch (const std::exception& e) {
-					Logger::log_error("could not decode metadata", e.what());
-				}
-			}
-
-
-		}
-	}
-	catch (const std::exception& e) {
-		Logger::log_error("Could not handle metadata", e.what());
-	}
-}
-

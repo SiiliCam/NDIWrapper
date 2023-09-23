@@ -2,8 +2,25 @@
 #include "Logger.hpp"
 
 #include <iostream>
-NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup) : threadPool_(4), isReceivingRunning_(false), isSourceFindingRunning_(false), metadatalistenerrunning_(false), _findGroup(findGroup), currentOutput_(), groupToFind_(groupToFind){
+NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup) :
+	NDIBase(
+		[this](NDIlib_metadata_frame_t& metadataFrame) {
+			return NDIlib_recv_capture_v2(pNDIInstance_, nullptr, nullptr, &metadataFrame, 0);
+		},
+		[this](NDIlib_metadata_frame_t& metadataFrame) {
+			NDIlib_recv_send_metadata(pNDIInstance_, &metadataFrame);
+		},
+		[this](NDIlib_metadata_frame_t& metadataFrame) {
+			NDIlib_recv_free_metadata(pNDIInstance_, &metadataFrame);
+		}
+	),
+	isReceivingRunning_(false),
+	isSourceFindingRunning_(false),
+	_findGroup(findGroup),
+	currentOutput_(),
+	groupToFind_(groupToFind) {
 	// Initialization code, if any
+
 	currentOutput_.p_ndi_name = "";
 }
 
@@ -26,10 +43,6 @@ void NDIReceiver::addNDISourceCallback(NDISourceCallback sourceCallback) {
 	_ndiSourceCallbacks.push_back(sourceCallback);
 }
 
-void NDIReceiver::addMetadataCallback(MetaDataCallback metadataCallback) {
-	std::lock_guard<std::mutex> lock(metadtaCallbackMutex_);
-	_metadataCallbacks.push_back(metadataCallback);
-}
 void NDIReceiver::setFindOnlyGroupsState(bool state) {
 	if (state != _findGroup.load()) {
 
@@ -66,24 +79,6 @@ void NDIReceiver::startFrameGeneration() {
 	frameThread_ = std::thread(&NDIReceiver::generateFrames, this);
 }
 
-void NDIReceiver::stopMetadataListening() {
-	metadatalistenerrunning_ = false;
-	if (metadataThread_.joinable()) {
-		metadataThread_.join();
-	}
-}
-void NDIReceiver::startMetadataListening() {
-	if (metadatalistenerrunning_.load() == false) {
-
-		metadatalistenerrunning_.store(true);
-		metadataThread_ = std::thread(&NDIReceiver::metadataThreadLoop, this);
-	}
-	else {
-		Logger::log_warn("metadata listening already running");
-	}
-
-}
-
 void NDIReceiver::start() {
 
 	startSourceFinding();
@@ -98,9 +93,9 @@ void NDIReceiver::stop() {
 	stopFrameGeneration();
 
 	std::lock_guard<std::mutex> lock(pndiMutex_);
-	if (pNDI_recv_) {
-		NDIlib_recv_destroy(pNDI_recv_);
-		pNDI_recv_ = nullptr;
+	if (pNDIInstance_) {
+		NDIlib_recv_destroy(pNDIInstance_);
+		pNDIInstance_ = nullptr;
 	}
 }
 
@@ -117,15 +112,15 @@ void NDIReceiver::setOutput(const std::string& outputName) {
 		sourceLock.unlock();
 
 		std::lock_guard<std::mutex> lock(pndiMutex_);
-		if (pNDI_recv_) {
-			NDIlib_recv_destroy(pNDI_recv_);
+		if (pNDIInstance_) {
+			NDIlib_recv_destroy(pNDIInstance_);
 		}
 		// Create a new receiver for the selected source
 		Logger::log_info("connecting to output");
 		NDIlib_recv_create_v3_t recv_desc;
 		recv_desc.source_to_connect_to = currentOutput_; // Assuming selectedSource_ is of type NDIlib_source_t
 		recv_desc.color_format = NDIlib_recv_color_format_e_RGBX_RGBA; // Example format
-		pNDI_recv_ = NDIlib_recv_create_v3(&recv_desc);
+		pNDIInstance_ = NDIlib_recv_create_v3(&recv_desc);
 		Logger::log_info("created connection");
 	}
 	catch (const std::exception& e) {
@@ -219,7 +214,7 @@ void NDIReceiver::generateFrames() {
 
 				NDIlib_video_frame_v2_t video_frame;
 				std::lock_guard<std::mutex> lock(pndiMutex_);
-				auto type = NDIlib_recv_capture_v2(pNDI_recv_, &video_frame, nullptr, nullptr, 1000); // 5-second timeout
+				auto type = NDIlib_recv_capture_v2(pNDIInstance_, &video_frame, nullptr, nullptr, 1000); // 5-second timeout
 				if (type == NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
 					Logger::log_error("received metadata in generateframes ");
 				}
@@ -231,7 +226,7 @@ void NDIReceiver::generateFrames() {
 					frame.height = video_frame.yres;
 					frame.channels = 4; // Assuming RGBA format
 					frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
-					NDIlib_recv_free_video_v2(pNDI_recv_, &video_frame);
+					NDIlib_recv_free_video_v2(pNDIInstance_, &video_frame);
 					{
 						std::lock_guard<std::mutex> lock(frameMutex_);
 						currentFrame_ = frame;
@@ -256,57 +251,3 @@ void NDIReceiver::generateFrames() {
 		Logger::log_error("Could not generate frames", e.what());
 	}
 }
-
-void NDIReceiver::metadataThreadLoop() {
-	try {
-		while (metadatalistenerrunning_.load()) {
-
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-			
-			// Step 1: Lock and validate pNDI_recv_
-			{
-				NDIlib_metadata_frame_t metaDataFrame;
-				std::lock_guard<std::mutex> lock(pndiMutex_);
-				bool isLegit = !!pNDI_recv_;
-
-				if (isLegit) {
-					NDIlib_frame_type_e type;
-					{
-						type = NDIlib_recv_capture_v2(pNDI_recv_, nullptr, nullptr, &metaDataFrame, 0);  // Assume metadataRecv populates frame
-					}
-					//Logger::log_info("Type of frame received: ", type);
-					if (type != NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
-						continue;
-					}
-				}
-				else {
-					continue;
-				}
-				try {
-					if (metaDataFrame.p_data) {
-						//Logger::log_info("data received:", metaDataFrame.p_data);
-						MetadataContainer container = Metadata::decode(metaDataFrame.p_data);  // Assuming frame.data is std::string
-						// Step 4: Enqueue the parsed metadata for processing
-						std::lock_guard<std::mutex> lock(metadtaCallbackMutex_);
-						for (const auto& callback : _metadataCallbacks) {
-							MetadataContainer containerCopy = container;  // Deep copy if needed
-							threadPool_.enqueue([=]() { callback(containerCopy); });
-						}
-
-						NDIlib_recv_free_metadata(pNDI_recv_, &metaDataFrame);
-					}
-				}
-				catch (const std::exception& e) {
-					Logger::log_error("could not decode metadata", e.what());
-				}
-			}
-
-		}
-
-	}
-	catch (const std::exception& e) {
-		Logger::log_error("Could not handle metadata", e.what());
-	}
-}
-

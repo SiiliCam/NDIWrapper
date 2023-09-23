@@ -1,5 +1,5 @@
 # Specify the required source files
-set(SOURCES "src/NDIReceiver.cpp" "src/ThreadPool.cpp" "src/NDISender.cpp")
+set(SOURCES "src/NDIReceiver.cpp" "src/ThreadPool.cpp" "src/NDISender.cpp" "src/NDIBase.cpp")
 
 # Create the NDIReceiver library
 add_library(NDIWrapper ${SOURCES})
