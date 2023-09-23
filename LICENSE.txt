@@ -1,0 +1,32 @@
+NDIWrapper (2023, by Simo Rautiainen)
+=====================================
+
+This software is a wrapper for the NDI SDK and uses TinyXML for XML processing. This `license.txt` outlines the dual-licensing terms for NDIWrapper as well as the third-party libraries it depends on.
+
+NDIWrapper Dual Licensing
+--------------------------
+
+NDIWrapper is available under either of the following licenses:
+
+1. Commercial License (By Permission Only)
+---------------------
+This software is available under a commercial license only with explicit permission from Simo Rautiainen. Unauthorized commercial usage or resale is strongly discouraged. For more details on the commercial license, please contact Simo Rautiainen.
+
+2. GNU General Public License v3.0 (GPL-3.0) for OBS Use Only
+--------------------------------------------
+For the specific use case with OBS, NDIWrapper is available under the GPL-3.0 license. By using, distributing, or contributing to this project for OBS usage, you agree to the terms and conditions of GPL-3.0. You must also include this license text in any distributions or derivative works based on NDIWrapper for OBS usage.
+
+Third-Party Libraries
+----------------------
+
+1. NDI SDK
+----------
+NDI SDK is copyrighted by Vizrt NDI AB and is used under the terms of the NDI SDK License Agreement.
+
+2. TinyXML
+----------
+TinyXML is used under a zlib-like license.
+
+Warranty and Liability
+-----------------------
+This software is provided 'as-is', without any express or implied warranty. In no event will Simo Rautiainen or any of the third-party libraries be held liable for any damages arising from the use of this software.

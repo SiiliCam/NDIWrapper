@@ -8,6 +8,9 @@
 #include "MetaData.hpp"
 #include <random>
 
+/**
+ * @brief this file is a sample application where we stress test the library by creating multiple sources and one listener for them.
+ */
 int getRandomNumber(int length) {
     // Initialize a random number engine
     std::default_random_engine engine(static_cast<unsigned int>(std::chrono::steady_clock::now().time_since_epoch().count()));
