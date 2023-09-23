@@ -1,9 +1,9 @@
 [submodule "external/CommonTypes"]
-	path = external/CommonTypes
-	url = C:/Users/Simo/source/repos/lib/CommonTypes
+    path = external/CommonTypes
+    url = git@github.com:SiiliCam/CommonTypes.git
 [submodule "external/Logger"]
-	path = external/Logger
-	url = C:/Users/Simo/source/repos/lib/Logger
+    path = external/Logger
+    url = git@github.com:SiiliCam/Logger.git
 [submodule "external/tinyxml2"]
-	path = external/tinyxml2
-	url = https://github.com/leethomason/tinyxml2.git
+    path = external/tinyxml2
+    url = https://github.com/leethomason/tinyxml2.git

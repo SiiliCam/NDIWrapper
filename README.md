@@ -16,3 +16,21 @@ With this lib you can send control messages to the ndi sender from receiver and 
 The sample application includes a stress test where multiple ndi senders are created and one receiver
 is created and the receiver switches between the senders.
 
+## Development
+
+add a environment variable
+
+```
+NDI_SDK_ENV_PATH="path/to/NDI
+```
+
+if it is not defined then it tries to find the ndi lib from
+
+```
+NDI_SDK_ENV_PATH="C:/Program Files/NDI/NDI 5 SDK (Android)"
+```
+if `ANDROID` is defined or if its not then by default
+
+```
+NDI_SDK_ENV_PATH="C:/Program Files/NDI/NDI 5 SDK"
+```

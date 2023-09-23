@@ -23,9 +23,18 @@ endif()
 
 add_subdirectory(external/tinyxml2)
 
+if (DEFINED ENV{NDI_SDK_ENV_PATH})
+    set(NDI_SDK_PATH $ENV{NDI_SDK_ENV_PATH})
+else()
+    if (ANDROID)
+        set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK (Android)")
+    else()
+        set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK")
+    endif()
+endif()
+
 # Conditional NDI SDK Path and Library
 if (ANDROID)
-  set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK (Android)")
   include_directories(${NDI_SDK_PATH}/Include)
 
   if(ANDROID_ABI STREQUAL "armeabi-v7a")
@@ -43,7 +52,6 @@ if (ANDROID)
   endif()
 
 else()
-  set(NDI_SDK_PATH "C:/Program Files/NDI/NDI 5 SDK")
   include_directories(${NDI_SDK_PATH}/Include)
   
   set(NDI_LIBRARY_PATH "${NDI_SDK_PATH}/Lib/x64")
