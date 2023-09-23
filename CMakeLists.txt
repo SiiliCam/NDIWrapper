@@ -12,6 +12,7 @@ endif()
 
 project ("ndiwrapper")
 
+# other projects use logger and commontypes as well so no reason to have multiple versions of them
 if (NOT TARGET Logger)
   add_subdirectory(external/Logger)
 endif()

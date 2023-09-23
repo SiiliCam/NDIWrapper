@@ -4,7 +4,9 @@
 #include <functional>
 #include "tinyxml2.h"
 
-/** @brief contains some application specific metadata handlers */
+/**
+ * @brief contains some application specific metadata handlers, currently only hard coded structs
+ */
 struct BoundingBox {
 	struct {
 		int64_t x;
