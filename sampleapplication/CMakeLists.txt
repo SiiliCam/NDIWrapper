@@ -13,7 +13,7 @@ endif()
 
 add_custom_command(TARGET SampleExample POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
-  "C:/Program Files/NDI/NDI 5 Runtime/v5/Processing.NDI.Lib.x64.dll"
+  "${NDI_SDK_PATH}/Bin/x64/Processing.NDI.Lib.x64.dll"
   $<TARGET_FILE_DIR:SampleExample>
 )
 

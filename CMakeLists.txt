@@ -2,8 +2,14 @@
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.8)
+
+option(BUILD_ONLY_LIB "Build only the library" OFF)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+
+
 # Enable Hot Reload for MSVC compilers if supported.
 if (POLICY CMP0141)
   cmake_policy(SET CMP0141 NEW)
@@ -66,4 +72,6 @@ find_package(Threads REQUIRED)
 
 # Include sub-projects.
 add_subdirectory ("ndiwrapper")
-add_subdirectory ("sampleapplication")
+if(NOT BUILD_ONLY_LIB)
+  add_subdirectory ("sampleapplication")
+endif()
