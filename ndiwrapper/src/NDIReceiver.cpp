@@ -112,8 +112,10 @@ bool NDIReceiver::setOutput(const std::string& outputName) {
 			return false;
 		}
 		std::unique_lock<std::mutex> sourceLock(sourceMutex_);
+		currentOutputString_ = outputName;
 		decltype(ndiSources_.at(outputName)) ndisource = ndiSources_.at(outputName);
 		currentOutput_ = ndisource;
+
 		sourceLock.unlock();
 
 		std::lock_guard<std::mutex> lock(pndiMutex_);
@@ -218,31 +220,9 @@ void NDIReceiver::generateFrames() {
 
 			// Check if the selected source has changed
 			if (!isSourceSet_.load()) {
-				{
-					std::lock_guard<std::mutex> lock(sourceMutex_);
-					auto currentSources = getCurrentSources();
-					auto it = std::find(currentSources.begin(), currentSources.end(), std::string(currentOutput_.p_ndi_name));
-					if (it == currentSources.end()) {
-						std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS));
-						continue;
-					}
-				}
-				try {
-
-					std::lock_guard<std::mutex> lock(pndiMutex_);
-					if (pNDIInstance_) {
-						NDIlib_recv_destroy(pNDIInstance_);
-					}
-					// Create a new receiver for the selected source
-					Logger::log_info("connecting to output");
-					NDIlib_recv_create_v3_t recv_desc;
-					recv_desc.source_to_connect_to = currentOutput_; // Assuming selectedSource_ is of type NDIlib_source_t
-					recv_desc.color_format = NDIlib_recv_color_format_e_RGBX_RGBA; // Example format
-					pNDIInstance_ = NDIlib_recv_create_v3(&recv_desc);
-					Logger::log_info("created connection");
-				}
-				catch (...) {
-					Logger::log_error("failed to create connection in frame generation");
+				if (!setOutput(currentOutputString_)) {
+					std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS));
+					continue;
 				}
 			}
 			// Capture video frames from the receiver

@@ -148,6 +148,7 @@ private:
 
 	Image currentFrame_;
 	NDIlib_source_t currentOutput_;
+	std::string currentOutputString_;
 
 	std::vector<FrameCallback> _frameCallbacks;
 	std::vector<NDISourceCallback> _ndiSourceCallbacks;
