@@ -20,7 +20,7 @@ NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup) :
 	currentOutput_(),
 	groupToFind_(groupToFind) {
 	// Initialization code, if any
-
+	Logger::init_logging("C:/Users/Simo/AppData/Roaming/log2.log");
 	currentOutput_.p_ndi_name = "";
 }
 
@@ -75,6 +75,10 @@ void NDIReceiver::stopFrameGeneration() {
 	}
 }
 void NDIReceiver::startFrameGeneration() {
+	if (isReceivingRunning_.load()) {
+		Logger::log_warn("frame generation already running");
+		return;
+	}
 	isReceivingRunning_ = true;
 	frameThread_ = std::thread(&NDIReceiver::generateFrames, this);
 }
