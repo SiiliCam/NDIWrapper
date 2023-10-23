@@ -66,8 +66,9 @@ public:
 	/**
 	 * @brief connects to the given output
 	 * @param[in] outputName the mdns name of the source, this must be in the ndiSources_ map
+	 * @returns true if it set new output and false if it did not do anything due to error or the source is already set
 	 */
-	void setOutput(const std::string& outputName);
+	bool setOutput(const std::string& outputName);
 
 	/**
 	 * @brief gets the current sources

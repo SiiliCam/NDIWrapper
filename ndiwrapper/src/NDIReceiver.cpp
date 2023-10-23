@@ -103,12 +103,12 @@ void NDIReceiver::stop() {
 	}
 }
 
-void NDIReceiver::setOutput(const std::string& outputName) {
+bool NDIReceiver::setOutput(const std::string& outputName) {
 	Logger::log_info("setting output to", outputName);
 	try {
 		if (outputName == std::string(currentOutput_.p_ndi_name)) {
 			Logger::log_info("output is the same as current, doing nothing");
-			return;
+			return false;
 		}
 		std::unique_lock<std::mutex> sourceLock(sourceMutex_);
 		decltype(ndiSources_.at(outputName)) ndisource = ndiSources_.at(outputName);
@@ -129,8 +129,10 @@ void NDIReceiver::setOutput(const std::string& outputName) {
 	}
 	catch (const std::exception& e) {
 		Logger::log_error("could not set currentOutput_");
+		return false;
 	}
 	Logger::log_info("output set", outputName);
+	return true;
 }
 
 void NDIReceiver::resetSources() {
