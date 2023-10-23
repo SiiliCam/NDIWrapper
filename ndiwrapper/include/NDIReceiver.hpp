@@ -141,6 +141,7 @@ private:
 
 	std::atomic<bool> isReceivingRunning_;
 	std::atomic<bool> isSourceFindingRunning_;
+	std::atomic<bool> isSourceSet_;
 
 	std::thread sourceThread_;
 	std::thread frameThread_;

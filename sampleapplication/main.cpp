@@ -77,6 +77,7 @@ Image generateRGBAImage(int width, int height, uint8_t r, uint8_t g, uint8_t b) 
 }
 
 int main() {
+
 	NDIReceiver receiver("Testing", true);
 
 	// sets the found source as current
