@@ -91,7 +91,7 @@ protected:
 	ThreadPool threadPool_;
 
 private:
-	std::atomic<bool> metadatalistenerrunning_;
+	std::atomic<bool> metadatalistenerrunning_ ;
 	std::thread metadataThread_;
 	std::mutex metadataCallbackMutex_;
 	std::vector<MetaDataCallback> _metadataCallbacks;
@@ -119,7 +119,7 @@ void NDIBase<NDIInstanceType>::sendMetadata(const Args&... args)
 
 template<typename NDIInstanceType>
 NDIBase<NDIInstanceType>::NDIBase(CaptureMetadataFunc capture, MetadataFunc send, MetadataFunc free)
-        : pNDIInstance_(nullptr), captureMetadata_(capture), sendMetadata_(send), freeMetadata_(free), threadPool_(4)
+        : metadatalistenerrunning_(false), pNDIInstance_(nullptr), captureMetadata_(capture), sendMetadata_(send), freeMetadata_(free), threadPool_(4)
 {
     std::lock_guard<std::mutex> lock(count_mutex);
     if (object_count == 0) {
@@ -184,6 +184,7 @@ void NDIBase<NDIInstanceType>::stopMetadataListening() {
     if (metadataThread_.joinable()) {
         metadataThread_.join();
     }
+    Logger::log_info("Metadata stopped");
 }
 
 template<typename NDIInstanceType>
@@ -192,6 +193,7 @@ void NDIBase<NDIInstanceType>::startMetadataListening() {
 
         metadatalistenerrunning_.store(true);
         metadataThread_ = std::thread(&NDIBase::metadataThreadLoop, this);
+        Logger::log_info("Metadata started");
     }
     else {
         Logger::log_warn("metadata listening already running");
