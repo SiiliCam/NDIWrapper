@@ -17,4 +17,5 @@ add_custom_command(TARGET SampleExample POST_BUILD
   $<TARGET_FILE_DIR:SampleExample>
 )
 
+add_dependencies(SampleExample NDIWrapper)
 # TODO: Add tests and install targets if needed.

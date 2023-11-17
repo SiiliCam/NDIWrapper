@@ -26,4 +26,4 @@ target_include_directories(NDIWrapper PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-add_dependencies(NDIWrapper Logger)
+add_dependencies(NDIWrapper Logger CommonTypes)

@@ -34,6 +34,11 @@ Image NDIReceiver::getFrame() {
 	return currentFrame_;
 }
 
+Audio NDIReceiver::getAudio() {
+	std::lock_guard<std::mutex> lock(audioMutex_);
+	return currentAudio_;
+}
+
 void NDIReceiver::addFrameCallback(FrameCallback frameCallback) {
 	std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
 	_frameCallbacks.push_back(frameCallback);
@@ -42,6 +47,11 @@ void NDIReceiver::addFrameCallback(FrameCallback frameCallback) {
 void NDIReceiver::addNDISourceCallback(NDISourceCallback sourceCallback) {
 	std::lock_guard<std::mutex> lock(ndiSourceCallbackMutex_);
 	_ndiSourceCallbacks.push_back(sourceCallback);
+}
+
+void NDIReceiver::addAudioCallback(AudioCallback audioCallback) {
+	std::lock_guard<std::mutex> lock(audioCallbackVecMutex_);
+	_audioCallbacks.push_back(audioCallback);
 }
 
 void NDIReceiver::setFindOnlyGroupsState(bool state) {
@@ -132,7 +142,7 @@ bool NDIReceiver::setOutput(const std::string& outputName) {
 		isSourceSet_ = true;
 	}
 	catch (const std::exception& e) {
-		Logger::log_error("could not set currentOutput_");
+		Logger::log_error("could not set currentOutput_: {}", e.what());
 		isSourceSet_ = false;
 		return false;
 	}
@@ -229,20 +239,48 @@ void NDIReceiver::generateFrames() {
 			{
 
 				NDIlib_video_frame_v2_t video_frame;
+				NDIlib_audio_frame_v2_t audio_frame;
+
 				std::lock_guard<std::mutex> lock(pndiMutex_);
-				auto type = NDIlib_recv_capture_v2(pNDIInstance_, &video_frame, nullptr, nullptr, 1000); // 5-second timeout
+				auto type = NDIlib_recv_capture_v2(pNDIInstance_, &video_frame, &audio_frame, nullptr, 1000); // 5-second timeout
+
 				if (type == NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
 					Logger::log_error("received metadata in generateframes ");
 				}
+				if (type == NDIlib_frame_type_e::NDIlib_frame_type_audio) {
+					// Process and convert the NDI audio frame to your Audio struct
+					Audio audio;
+					audio.sampleRate = audio_frame.sample_rate;
+					audio.channels = audio_frame.no_channels;
+					audio.noSamples = audio_frame.no_samples;
+					audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
+					NDIlib_recv_free_audio_v2(pNDIInstance_, &audio_frame);
 
-				if (video_frame.p_data) {
+					{
+						std::lock_guard<std::mutex> lock(audioMutex_);
+						currentAudio_ = audio;
+					}
+					// Call audio frame callbacks
+					{
+						std::lock_guard<std::mutex> lock(audioCallbackVecMutex_);
+						for (const auto& callback : _audioCallbacks) {
+							threadPool_.enqueue([=]() { 
+								callback(audio);
+								});
+						}
+					}
+				}
+				if (type == NDIlib_frame_type_e::NDIlib_frame_type_video) {
 					// Convert the NDI frame to your desired format and store in currentFrame_
 					Image frame;
 					frame.width = video_frame.xres;
 					frame.height = video_frame.yres;
 					frame.channels = 4; // Assuming RGBA format
+
 					frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
+
 					NDIlib_recv_free_video_v2(pNDIInstance_, &video_frame);
+
 					{
 						std::lock_guard<std::mutex> lock(frameMutex_);
 						currentFrame_ = frame;
@@ -250,13 +288,11 @@ void NDIReceiver::generateFrames() {
 					{
 						std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
 						for (const auto& callback : _frameCallbacks) {
-							Image frameCopy = frame;  // Ensure you make a deep copy if needed
-							threadPool_.enqueue([=]() { callback(frameCopy); });
+							threadPool_.enqueue([=]() { 
+								callback(frame); 
+								});
 						}
 					}
-					// Free the video frame after using it
-
-
 				}
 			}
 

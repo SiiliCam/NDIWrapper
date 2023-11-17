@@ -26,7 +26,7 @@ public:
 	 * @param[in] name the mdns name of the sender
 	 * @param[in] group the group of the sender
 	 */
-	NDISender(const std::string& name, const std::string& group = "");
+	NDISender(const std::string& name, const std::string& group = "", bool enableVideo = true, bool enableAudio = false);
 
 	/**
 	 * @brief stops the metadata listening and sending
@@ -39,7 +39,7 @@ public:
 	 * @param[in] videoType the frame type to add to the stream, by default it NV12 YUV (android camera is YUV by default)
 	 */
 	void feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType = NDIlib_FourCC_video_type_NV12);
-
+	void feedAudio(Audio& audioFrame);
 
 	void start();
 	void stop();

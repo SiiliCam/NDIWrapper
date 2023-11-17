@@ -18,6 +18,7 @@ using namespace common_types;
 
 using FrameCallback = std::function<void(Image)>;
 using NDISourceCallback = std::function<void(std::string)>;
+using AudioCallback = std::function<void(Audio)>;
 
 /**
  * @brief the receiver implementation, for sources and frames there is callbacks when new one comes
@@ -52,6 +53,12 @@ public:
 	 * @returns the frame
 	 */
 	Image getFrame();
+
+	/**
+	 * @brief a method to get the audio
+	 * @returns the audio frame
+	 */
+	Audio getAudio();
 
 	/**
 	 * @brief starts the source listening, frame listening and metadata listening
@@ -104,6 +111,12 @@ public:
 	void addFrameCallback(FrameCallback frameCallback);
 
 	/**
+	 * @brief adds a callback which gets called each time a audio comes in
+	 * @param[in] audioCallback the audio callback which gets called
+	 */
+	void addAudioCallback(AudioCallback audioCallback);
+
+	/**
 	 * @brief adds a frame callback
 	 * @param[in] frameCallback the frame callback which gets called each time new frame comes in
 	 */
@@ -120,6 +133,7 @@ public:
 	 */
 	void resetSources();
 
+
 private:
 	/**
 	 * @brief endless loop which updates the sources
@@ -128,16 +142,18 @@ private:
 	void updateSources();
 
 	/**
-	 * @brief endless loop waits for the frames to come from the selected source
+	 * @brief endless loop waits for the video frames to come from the selected source
 	 * @details calls every callback in \_frameCallbacks with the image and updates the currentFrame\_ with newest image
 	 * The image is RGBA image and its currently hard coded
 	 */
 	void generateFrames();
 
+
 	std::map<std::string, NDIlib_source_t> ndiSources_;
 
 	std::mutex frameMutex_;
 	std::mutex sourceMutex_;
+	std::mutex audioMutex_;
 
 	std::atomic<bool> isReceivingRunning_;
 	std::atomic<bool> isSourceFindingRunning_;
@@ -147,14 +163,17 @@ private:
 	std::thread frameThread_;
 
 	Image currentFrame_;
+	Audio currentAudio_;
 	NDIlib_source_t currentOutput_;
 	std::string currentOutputString_;
 
 	std::vector<FrameCallback> _frameCallbacks;
 	std::vector<NDISourceCallback> _ndiSourceCallbacks;
+	std::vector<AudioCallback> _audioCallbacks;
 
 	std::mutex frameCallbackVecMutex_;
 	std::mutex ndiSourceCallbackMutex_;
+	std::mutex audioCallbackVecMutex_;
 
 	std::atomic<bool> _findGroup;
 	std::string groupToFind_;

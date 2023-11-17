@@ -7,7 +7,7 @@
 
 #include "Logger.hpp"
 
-NDISender::NDISender(const std::string& name, const std::string& group) :
+NDISender::NDISender(const std::string& name, const std::string& group, bool enableVideo, bool enableAudio) :
 	NDIBase(
 		[this](NDIlib_metadata_frame_t& metadataFrame) {
 			return NDIlib_send_capture(pNDIInstance_, &metadataFrame, 0);
@@ -24,8 +24,8 @@ NDISender::NDISender(const std::string& name, const std::string& group) :
 	if (group.length() > 0) {
 		NDI_send_create_desc.p_groups = group.c_str(); // Use your actual group name here
 	}
-	NDI_send_create_desc.clock_video = true;
-	NDI_send_create_desc.clock_audio = false;
+	NDI_send_create_desc.clock_video = enableVideo;
+	NDI_send_create_desc.clock_audio = enableAudio;
 
 	{
 		std::lock_guard<std::mutex> lock(pndiMutex_);
@@ -68,5 +68,22 @@ void NDISender::feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType) {
 	{
 		std::lock_guard<std::mutex> lock(pndiMutex_);
 		NDIlib_send_send_video_v2(pNDIInstance_, &NDI_video_frame);
+	}
+}
+void NDISender::feedAudio(Audio& audio) {
+	if (!pNDIInstance_) {
+		Logger::log_error("Pndi send not initialized for audio");
+		return;
+	}
+
+	NDIlib_audio_frame_v2_t NDI_audio_frame;
+	NDI_audio_frame.sample_rate = audio.sampleRate;
+	NDI_audio_frame.no_channels = audio.channels;
+	NDI_audio_frame.no_samples = audio.noSamples;
+	NDI_audio_frame.p_data = audio.data.data(); // Point to the data in the vector
+
+	{
+		std::lock_guard<std::mutex> lock(pndiMutex_);
+		NDIlib_send_send_audio_v2(pNDIInstance_, &NDI_audio_frame);
 	}
 }

@@ -120,7 +120,7 @@ int main() {
     std::vector<NDISender*> senders;
 
     for (int i = 0; i < 20; i++) {
-        NDISender* sender = new NDISender{ "mymdnsname" + std::to_string(i), "Testing" };
+        NDISender* sender = new NDISender{ "mymdnsname" + std::to_string(i), "Testing" , true, true};
         senders.push_back(sender);
     }
     NDISender sender("mymdnsname", "Testing");
@@ -172,6 +172,13 @@ int main() {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }});
 
+    receiver.addAudioCallback([](Audio audio) {
+        unsigned long total = 0;
+        for (const auto& value : audio.data) {
+            total += value;
+        }
+        Logger::log_info("datalength:", audio.data.size(), "total:", total, "mean:", std::to_string(total / static_cast<float>(audio.noSamples)), "number of samples:", audio.noSamples, "channels:", static_cast<int>(audio.channels), "samplerate:", audio.sampleRate);
+        });
     for (auto& sender : senders) {
         std::thread senderThread([&]() {
 
@@ -194,6 +201,25 @@ int main() {
             });
         senderThread.detach();
     }
+    for (auto& sender : senders) {
+        std::thread senderThread([&]() {
+
+
+            while (true) {
+                Audio audio;
+                audio.channels = 1;
+                audio.noSamples = 4000;
+                audio.sampleRate = 44100;
+                for (int i = 0; i < audio.noSamples; i++) {
+                    audio.data.push_back((i % 1024 - 1) / 256.0f);
+                }
+                sender->feedAudio(audio);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            });
+        senderThread.detach();
+    }
+
     
     t.join();
 	return 0;
