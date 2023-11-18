@@ -81,6 +81,7 @@ void NDISender::feedAudio(Audio& audio) {
 	NDI_audio_frame.no_channels = audio.channels;
 	NDI_audio_frame.no_samples = audio.noSamples;
 	NDI_audio_frame.p_data = audio.data.data(); // Point to the data in the vector
+	NDI_audio_frame.channel_stride_in_bytes = NDI_audio_frame.no_samples * sizeof(float);
 
 	{
 		std::lock_guard<std::mutex> lock(pndiMutex_);
