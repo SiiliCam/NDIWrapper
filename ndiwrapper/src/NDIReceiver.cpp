@@ -254,7 +254,7 @@ void NDIReceiver::generateFrames() {
 	uint32_t sleeptimeMS = 16;
 	auto lastVideoFrameTime = std::chrono::steady_clock::now();
 	auto lastAudioFrameTime = std::chrono::steady_clock::now();
-	const auto disconnectionThreshold = std::chrono::seconds(3);
+	const auto disconnectionThreshold = std::chrono::milliseconds(500);
 
 	bool videoConnected = false;
 	bool audioConnected = false;
@@ -317,6 +317,8 @@ void NDIReceiver::generateFrames() {
 				else if (audioConnected && (std::chrono::steady_clock::now() - lastAudioFrameTime > disconnectionThreshold)) {
 					audioConnected = false;
 					if (_audioDisconnected) {
+						audioAvailable_ = true;
+						audioCondition_.notify_one();
 						_audioDisconnected();
 					}
 				}
