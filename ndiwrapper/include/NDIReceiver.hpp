@@ -64,6 +64,12 @@ public:
 	Audio getAudio();
 
 	/**
+	 * @brief blocks until it manages to get a new audio
+	 * @returns the audio frame
+	 */
+	Audio getAudioNew();
+
+	/**
 	 * @brief starts the source listening, frame listening and metadata listening
 	 */
 	void start();
@@ -183,6 +189,9 @@ private:
 	std::atomic<bool> isReceivingRunning_;
 	std::atomic<bool> isSourceFindingRunning_;
 	std::atomic<bool> isSourceSet_;
+
+	std::condition_variable audioCondition_;
+	bool audioAvailable_ = false;
 
 	std::thread sourceThread_;
 	std::thread frameThread_;

@@ -41,7 +41,15 @@ Audio NDIReceiver::getAudio() {
 	currentAudio_.isNew = false;
 	return audio;
 }
+Audio NDIReceiver::getAudioNew() {
+	std::unique_lock<std::mutex> lock(audioMutex_);
+	audioCondition_.wait(lock, [this] { return audioAvailable_; });
 
+	auto audio = currentAudio_;
+	currentAudio_.isNew = false;
+	audioAvailable_ = false;  // Reset the flag
+	return audio;
+}
 void NDIReceiver::addFrameCallback(FrameCallback frameCallback) {
 	std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
 	_frameCallbacks.push_back(frameCallback);
@@ -293,7 +301,9 @@ void NDIReceiver::generateFrames() {
 					{
 						std::lock_guard<std::mutex> lock(audioMutex_);
 						currentAudio_ = audio;
+						audioAvailable_ = true;
 					}
+					audioCondition_.notify_one();
 					// Call audio frame callbacks
 					{
 						std::lock_guard<std::mutex> lock(audioCallbackVecMutex_);
