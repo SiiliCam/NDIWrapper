@@ -23,6 +23,7 @@ NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup) :
 	// Initialization code, if any
 	Logger::init_logging("C:/Users/Simo/AppData/Roaming/log2.log");
 	currentOutput_.p_ndi_name = "";
+
 }
 
 NDIReceiver::~NDIReceiver() {
@@ -36,7 +37,9 @@ Image NDIReceiver::getFrame() {
 
 Audio NDIReceiver::getAudio() {
 	std::lock_guard<std::mutex> lock(audioMutex_);
-	return currentAudio_;
+	auto audio =  currentAudio_;
+	currentAudio_.isNew = false;
+	return audio;
 }
 
 void NDIReceiver::addFrameCallback(FrameCallback frameCallback) {
@@ -231,7 +234,7 @@ void NDIReceiver::generateFrames() {
 			// Check if the selected source has changed
 			if (!isSourceSet_.load()) {
 				if (!setOutput(currentOutputString_)) {
-					std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS));
+					std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS*10));
 					continue;
 				}
 			}
@@ -254,6 +257,7 @@ void NDIReceiver::generateFrames() {
 					audio.channels = audio_frame.no_channels;
 					audio.noSamples = audio_frame.no_samples;
 					audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
+					audio.isNew = true;
 					NDIlib_recv_free_audio_v2(pNDIInstance_, &audio_frame);
 
 					{
@@ -296,7 +300,6 @@ void NDIReceiver::generateFrames() {
 				}
 			}
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS)); // ~60fps
 		}
 	}
 	catch (const std::exception& e) {
