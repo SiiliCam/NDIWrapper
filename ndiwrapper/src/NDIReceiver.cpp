@@ -37,7 +37,7 @@ Image NDIReceiver::getFrame() {
 
 Audio NDIReceiver::getAudio() {
 	std::lock_guard<std::mutex> lock(audioMutex_);
-	auto audio =  currentAudio_;
+	auto audio = currentAudio_;
 	currentAudio_.isNew = false;
 	return audio;
 }
@@ -115,6 +115,23 @@ void NDIReceiver::stop() {
 		NDIlib_recv_destroy(pNDIInstance_);
 		pNDIInstance_ = nullptr;
 	}
+}
+
+
+void NDIReceiver::setAudioConnectedCallback(ConnectionCallback callback) {
+	_audioConnected = callback;
+}
+
+void NDIReceiver::setAudioDisconnectedCallback(ConnectionCallback callback) {
+	_audioDisconnected = callback;
+}
+
+void NDIReceiver::setVideoConnectedCallback(ConnectionCallback callback) {
+	_videoConnected = callback;
+}
+
+void NDIReceiver::setVideoDisconnectedCallback(ConnectionCallback callback) {
+	_videoDisconnected = callback;
 }
 
 bool NDIReceiver::setOutput(const std::string& outputName) {
@@ -227,14 +244,19 @@ std::vector<std::string> NDIReceiver::getCurrentSources() {
 
 void NDIReceiver::generateFrames() {
 	uint32_t sleeptimeMS = 16;
+	auto lastVideoFrameTime = std::chrono::steady_clock::now();
+	auto lastAudioFrameTime = std::chrono::steady_clock::now();
+	const auto disconnectionThreshold = std::chrono::seconds(3);
 
+	bool videoConnected = false;
+	bool audioConnected = false;
 	try {
 		while (isReceivingRunning_.load()) {
 
 			// Check if the selected source has changed
 			if (!isSourceSet_.load()) {
 				if (!setOutput(currentOutputString_)) {
-					std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS*10));
+					std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS * 10));
 					continue;
 				}
 			}
@@ -251,6 +273,12 @@ void NDIReceiver::generateFrames() {
 					Logger::log_error("received metadata in generateframes ");
 				}
 				if (type == NDIlib_frame_type_e::NDIlib_frame_type_audio) {
+					if (!audioConnected) {
+						audioConnected = true;
+						if (_audioConnected) {
+							_audioConnected();
+						}
+					}
 					// Process and convert the NDI audio frame to your Audio struct
 					Audio audio;
 					audio.sampleRate = audio_frame.sample_rate;
@@ -268,13 +296,27 @@ void NDIReceiver::generateFrames() {
 					{
 						std::lock_guard<std::mutex> lock(audioCallbackVecMutex_);
 						for (const auto& callback : _audioCallbacks) {
-							threadPool_.enqueue([=]() { 
+							threadPool_.enqueue([=]() {
 								callback(audio);
 								});
 						}
 					}
 				}
+				else if (audioConnected && (std::chrono::steady_clock::now() - lastAudioFrameTime > disconnectionThreshold)) {
+					audioConnected = false;
+					if (_audioDisconnected) {
+						_audioDisconnected();
+					}
+				}
+
 				if (type == NDIlib_frame_type_e::NDIlib_frame_type_video) {
+					if (!videoConnected) {
+						videoConnected = true;
+						if (_videoConnected) {
+							_videoConnected();
+						}
+					}
+					lastVideoFrameTime = std::chrono::steady_clock::now();
 					// Convert the NDI frame to your desired format and store in currentFrame_
 					Image frame;
 					frame.width = video_frame.xres;
@@ -292,10 +334,16 @@ void NDIReceiver::generateFrames() {
 					{
 						std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
 						for (const auto& callback : _frameCallbacks) {
-							threadPool_.enqueue([=]() { 
-								callback(frame); 
+							threadPool_.enqueue([=]() {
+								callback(frame);
 								});
 						}
+					}
+				}
+				else if (videoConnected && (std::chrono::steady_clock::now() - lastVideoFrameTime > disconnectionThreshold)) {
+					videoConnected = false;
+					if (_videoDisconnected) {
+						_videoDisconnected();
 					}
 				}
 			}

@@ -20,6 +20,7 @@ using FrameCallback = std::function<void(Image)>;
 using NDISourceCallback = std::function<void(std::string)>;
 using AudioCallback = std::function<void(Audio)>;
 
+using ConnectionCallback = std::function<void()>;
 /**
  * @brief the receiver implementation, for sources and frames there is callbacks when new one comes
  * @details this listens to new ndi sources, metadata (because of base) and frames
@@ -133,7 +134,29 @@ public:
 	 */
 	void resetSources();
 
+	/**
+	 * @brief gets called when we start receiving audio frames
+	 * @note not synchronized, so set these before you start generating frames
+	 */
+	void setAudioConnectedCallback(ConnectionCallback callback);
 
+	/**
+	 * @brief gets called when we stop receiving audio frames
+	 * @note not synchronized, so set these before you start generating frames
+	 */
+	void setAudioDisconnectedCallback(ConnectionCallback callback);
+
+	/**
+	 * @brief gets called when we start receiving video frames
+	 * @note not synchronized, so set these before you start generating frames
+	 */
+	void setVideoConnectedCallback(ConnectionCallback callback);
+
+	/**
+	 * @brief gets called when we stop receiving video frames
+	 * @note not synchronized, so set these before you start generating frames
+	 */
+	void setVideoDisconnectedCallback(ConnectionCallback callback);
 private:
 	/**
 	 * @brief endless loop which updates the sources
@@ -170,6 +193,12 @@ private:
 	std::vector<FrameCallback> _frameCallbacks;
 	std::vector<NDISourceCallback> _ndiSourceCallbacks;
 	std::vector<AudioCallback> _audioCallbacks;
+
+	ConnectionCallback _audioConnected;
+	ConnectionCallback _audioDisconnected;
+
+	ConnectionCallback _videoConnected;
+	ConnectionCallback _videoDisconnected;
 
 	std::mutex frameCallbackVecMutex_;
 	std::mutex ndiSourceCallbackMutex_;

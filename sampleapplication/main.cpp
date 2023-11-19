@@ -208,10 +208,10 @@ int main() {
 
             while (true) {
                 Audio audio;
-                audio.channels = 1;
+                audio.channels = 2;
                 audio.noSamples = 4000;
                 audio.sampleRate = 44100;
-                for (int i = 0; i < audio.noSamples; i++) {
+                for (int i = 0; i < audio.noSamples * audio.channels; i++) {
                     audio.data.push_back((i % 1024 - 1) / 256.0f);
                 }
                 sender->feedAudio(audio);
