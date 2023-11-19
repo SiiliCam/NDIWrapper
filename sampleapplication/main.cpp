@@ -163,6 +163,7 @@ int main() {
         while (true) {
             Zoom zoom{ (++i % 200) / 10.0 };
             receiver.sendMetadata(zoom);
+
             auto frame = receiver.getFrame();
             if (!frame.data.empty()) {
                 auto [redMedian, greenMedian, blueMedian] = calculateRGBMedians(frame);
