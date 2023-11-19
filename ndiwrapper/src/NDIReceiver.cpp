@@ -118,7 +118,7 @@ void NDIReceiver::stop() {
 }
 
 
-void NDIReceiver::setAudioConnectedCallback(ConnectionCallback callback) {
+void NDIReceiver::setAudioConnectedCallback(ConnectionCallbackAudio callback) {
 	_audioConnected = callback;
 }
 
@@ -126,7 +126,7 @@ void NDIReceiver::setAudioDisconnectedCallback(ConnectionCallback callback) {
 	_audioDisconnected = callback;
 }
 
-void NDIReceiver::setVideoConnectedCallback(ConnectionCallback callback) {
+void NDIReceiver::setVideoConnectedCallback(ConnectionCallbackVideo callback) {
 	_videoConnected = callback;
 }
 
@@ -273,12 +273,7 @@ void NDIReceiver::generateFrames() {
 					Logger::log_error("received metadata in generateframes ");
 				}
 				if (type == NDIlib_frame_type_e::NDIlib_frame_type_audio) {
-					if (!audioConnected) {
-						audioConnected = true;
-						if (_audioConnected) {
-							_audioConnected();
-						}
-					}
+
 
 					lastAudioFrameTime = std::chrono::steady_clock::now();
 					// Process and convert the NDI audio frame to your Audio struct
@@ -289,7 +284,12 @@ void NDIReceiver::generateFrames() {
 					audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
 					audio.isNew = true;
 					NDIlib_recv_free_audio_v2(pNDIInstance_, &audio_frame);
-
+					if (!audioConnected) {
+						audioConnected = true;
+						if (_audioConnected) {
+							_audioConnected(audio);
+						}
+					}
 					{
 						std::lock_guard<std::mutex> lock(audioMutex_);
 						currentAudio_ = audio;
@@ -312,12 +312,7 @@ void NDIReceiver::generateFrames() {
 				}
 
 				if (type == NDIlib_frame_type_e::NDIlib_frame_type_video) {
-					if (!videoConnected) {
-						videoConnected = true;
-						if (_videoConnected) {
-							_videoConnected();
-						}
-					}
+
 					lastVideoFrameTime = std::chrono::steady_clock::now();
 					// Convert the NDI frame to your desired format and store in currentFrame_
 					Image frame;
@@ -328,7 +323,12 @@ void NDIReceiver::generateFrames() {
 					frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
 
 					NDIlib_recv_free_video_v2(pNDIInstance_, &video_frame);
-
+					if (!videoConnected) {
+						videoConnected = true;
+						if (_videoConnected) {
+							_videoConnected(frame);
+						}
+					}
 					{
 						std::lock_guard<std::mutex> lock(frameMutex_);
 						currentFrame_ = frame;
