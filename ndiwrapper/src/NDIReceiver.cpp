@@ -279,6 +279,8 @@ void NDIReceiver::generateFrames() {
 							_audioConnected();
 						}
 					}
+
+					lastAudioFrameTime = std::chrono::steady_clock::now();
 					// Process and convert the NDI audio frame to your Audio struct
 					Audio audio;
 					audio.sampleRate = audio_frame.sample_rate;
