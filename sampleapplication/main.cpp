@@ -196,7 +196,7 @@ int main() {
                 box2.width = 400;
                 box2.height = 200;
                 sender->sendMetadata(box2);
-                sender->feedFrame(img, NDIlib_FourCC_video_type_RGBA);
+                sender->asyncFeedFrame(img, NDIlib_FourCC_video_type_RGBA);
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             });

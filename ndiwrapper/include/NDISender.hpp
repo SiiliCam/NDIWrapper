@@ -40,7 +40,13 @@ public:
 	 */
 	void feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType = NDIlib_FourCC_video_type_NV12);
 	void feedAudio(Audio& audioFrame);
+	void asyncFeedFrame(const Image& image, NDIlib_FourCC_video_type_e videoType);
 
 	void start();
 	void stop();
+
+private:
+	std::vector<Image> m_frameBuffers;
+	size_t m_currentBufferIndex = 0;
+	std::mutex m_bufferMutex;
 };

@@ -34,6 +34,7 @@ NDISender::NDISender(const std::string& name, const std::string& group, bool ena
 			throw std::runtime_error("Failed to create NDI send instance");
 		}
 	}
+	m_frameBuffers.resize(2);
 }
 
 NDISender::~NDISender() {
@@ -87,4 +88,32 @@ void NDISender::feedAudio(Audio& audio) {
 		std::lock_guard<std::mutex> lock(pndiMutex_);
 		NDIlib_send_send_audio_v2(pNDIInstance_, &NDI_audio_frame);
 	}
+}
+
+void NDISender::asyncFeedFrame(const Image& image, NDIlib_FourCC_video_type_e videoType) {
+	if (!pNDIInstance_) {
+		Logger::log_error("Pndi send not initialized");
+		return;
+	}
+
+	// Lock the buffer for writing
+	std::lock_guard<std::mutex> lock(m_bufferMutex);
+
+	// Copy image to the current buffer
+	m_frameBuffers[m_currentBufferIndex] = image; // Deep copy
+
+	// Prepare the NDI video frame with the current buffer
+	auto& buffer = m_frameBuffers[m_currentBufferIndex];
+	NDIlib_video_frame_v2_t NDI_video_frame;
+	NDI_video_frame.xres = buffer.width;
+	NDI_video_frame.yres = buffer.height;
+	NDI_video_frame.FourCC = videoType;
+	NDI_video_frame.p_data = buffer.data.data();
+	NDI_video_frame.line_stride_in_bytes = buffer.stride;
+
+	// Send the frame asynchronously
+	NDIlib_send_send_video_async_v2(pNDIInstance_, &NDI_video_frame);
+
+	// Toggle the buffer for the next frame
+	m_currentBufferIndex = (m_currentBufferIndex + 1) % 2;
 }

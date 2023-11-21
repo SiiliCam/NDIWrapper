@@ -396,6 +396,7 @@ NDIFrame NDIReceiver::getFrameNDI() {
 	return { std::nullopt, std::nullopt };
 }
 
+// TODO: this does not work fix it :D
 NDIFrame NDIReceiver::getFramesNDISynced() {
     NDIlib_video_frame_v2_t video_frame;
     NDIlib_audio_frame_v2_t audio_frame;
@@ -412,7 +413,7 @@ NDIFrame NDIReceiver::getFramesNDISynced() {
     }
 
     // Capture synced audio frame
-    NDIlib_framesync_capture_audio(_pndiFrameSync, &audio_frame, 48000, 2, 2000);
+    NDIlib_framesync_capture_audio(_pndiFrameSync, &audio_frame, 48000, 2, 1600);
     Audio audio;
     if (audio_frame.p_data) {
         audio.sampleRate = audio_frame.sample_rate;
@@ -424,7 +425,7 @@ NDIFrame NDIReceiver::getFramesNDISynced() {
     }
 
     return { 
-        video_frame.p_data ? std::optional<Audio>{audio} : std::nullopt, 
-        audio_frame.p_data ? std::optional<Image>{frame} : std::nullopt 
+        audio_frame.p_data ? std::optional<Audio>{audio} : std::nullopt, 
+        video_frame.p_data ? std::optional<Image>{frame} : std::nullopt 
     };
 }
