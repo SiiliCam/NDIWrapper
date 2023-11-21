@@ -7,6 +7,8 @@
 #include <Processing.NDI.Lib.h>
 #include <map>
 #include <functional>
+#include <optional>
+
 #include "commontypes.hpp"
 #include "ThreadPool.hpp"
 #include "MetaData.hpp"
@@ -23,6 +25,8 @@ using AudioCallback = std::function<void(Audio)>;
 using ConnectionCallback = std::function<void()>;
 using ConnectionCallbackAudio = std::function<void(Audio)>;
 using ConnectionCallbackVideo = std::function<void(Image)>;
+
+using NDIFrame = std::pair<std::optional<Audio>, std::optional<Image>>;
 /**
  * @brief the receiver implementation, for sources and frames there is callbacks when new one comes
  * @details this listens to new ndi sources, metadata (because of base) and frames
@@ -44,7 +48,7 @@ public:
 	 * @param[in] findGroup controls if we are actually finding the group. If this is set to false, then sources that have no group
 	 * are added
 	 */
-	NDIReceiver(const std::string& groupToFind = "", bool findGroup = true);
+	NDIReceiver(const std::string& groupToFind = "", bool findGroup = true, bool synced = false);
 
 	/**
 	 * @brief stops the source listening, and frame listening
@@ -173,12 +177,15 @@ private:
 	void updateSources();
 
 	/**
-	 * @brief endless loop waits for the video frames to come from the selected source
+	 * @brief endless loop waits for the video frames and audio to come from the selected source as they come
 	 * @details calls every callback in \_frameCallbacks with the image and updates the currentFrame\_ with newest image
 	 * The image is RGBA image and its currently hard coded
 	 */
 	void generateFrames();
 
+
+	NDIFrame getFrameNDI();
+	NDIFrame getFramesNDISynced();
 
 	std::map<std::string, NDIlib_source_t> ndiSources_;
 
@@ -217,5 +224,8 @@ private:
 
 	std::atomic<bool> _findGroup;
 	std::string groupToFind_;
+
+	NDIlib_framesync_instance_t _pndiFrameSync;
+	bool m_synced;
 };
 

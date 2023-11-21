@@ -78,7 +78,7 @@ Image generateRGBAImage(int width, int height, uint8_t r, uint8_t g, uint8_t b) 
 
 int main() {
 
-	NDIReceiver receiver("Testing", true);
+	NDIReceiver receiver("Testing", true, true);
 
 	// sets the found source as current
 	receiver.addNDISourceCallback([&receiver](std::string source) -> void {

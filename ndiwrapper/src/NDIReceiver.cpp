@@ -2,7 +2,7 @@
 #include "Logger.hpp"
 
 #include <iostream>
-NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup) :
+NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup, bool synced) :
 	NDIBase(
 		[this](NDIlib_metadata_frame_t& metadataFrame) {
 			return NDIlib_recv_capture_v2(pNDIInstance_, nullptr, nullptr, &metadataFrame, 0);
@@ -19,7 +19,9 @@ NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup) :
 	isSourceSet_(false),
 	_findGroup(findGroup),
 	currentOutput_(),
-	groupToFind_(groupToFind) {
+	groupToFind_(groupToFind),
+	_pndiFrameSync(nullptr),
+    m_synced(synced) {
 	// Initialization code, if any
 	Logger::init_logging("C:/Users/Simo/AppData/Roaming/log2.log");
 	currentOutput_.p_ndi_name = "";
@@ -157,6 +159,9 @@ bool NDIReceiver::setOutput(const std::string& outputName) {
 		sourceLock.unlock();
 
 		std::lock_guard<std::mutex> lock(pndiMutex_);
+		if (m_synced && _pndiFrameSync) {
+			NDIlib_framesync_destroy(_pndiFrameSync);
+		}
 		if (pNDIInstance_) {
 			NDIlib_recv_destroy(pNDIInstance_);
 		}
@@ -166,6 +171,9 @@ bool NDIReceiver::setOutput(const std::string& outputName) {
 		recv_desc.source_to_connect_to = currentOutput_; // Assuming selectedSource_ is of type NDIlib_source_t
 		recv_desc.color_format = NDIlib_recv_color_format_e_RGBX_RGBA; // Example format
 		pNDIInstance_ = NDIlib_recv_create_v3(&recv_desc);
+		if (m_synced) {
+			_pndiFrameSync = NDIlib_framesync_create(pNDIInstance_);
+		}
 		Logger::log_info("created connection");
 		isSourceSet_ = true;
 	}
@@ -258,6 +266,8 @@ void NDIReceiver::generateFrames() {
 
 	bool videoConnected = false;
 	bool audioConnected = false;
+
+
 	try {
 		while (isReceivingRunning_.load()) {
 
@@ -270,28 +280,18 @@ void NDIReceiver::generateFrames() {
 			}
 			// Capture video frames from the receiver
 			{
+				NDIFrame frames;
 
-				NDIlib_video_frame_v2_t video_frame;
-				NDIlib_audio_frame_v2_t audio_frame;
-
-				std::lock_guard<std::mutex> lock(pndiMutex_);
-				auto type = NDIlib_recv_capture_v2(pNDIInstance_, &video_frame, &audio_frame, nullptr, 1000); // 5-second timeout
-
-				if (type == NDIlib_frame_type_e::NDIlib_frame_type_metadata) {
-					Logger::log_error("received metadata in generateframes ");
+				if (m_synced) {
+					frames = getFramesNDISynced();
 				}
-				if (type == NDIlib_frame_type_e::NDIlib_frame_type_audio) {
-
-
+				else {
+					frames = getFrameNDI();
+				}
+				auto& [audioOpt, imageOpt] = frames;
+				if (audioOpt.has_value()) {
+					const auto& audio = audioOpt.value();
 					lastAudioFrameTime = std::chrono::steady_clock::now();
-					// Process and convert the NDI audio frame to your Audio struct
-					Audio audio;
-					audio.sampleRate = audio_frame.sample_rate;
-					audio.channels = audio_frame.no_channels;
-					audio.noSamples = audio_frame.no_samples;
-					audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
-					audio.isNew = true;
-					NDIlib_recv_free_audio_v2(pNDIInstance_, &audio_frame);
 					if (!audioConnected) {
 						audioConnected = true;
 						if (_audioConnected) {
@@ -322,19 +322,9 @@ void NDIReceiver::generateFrames() {
 						_audioDisconnected();
 					}
 				}
-
-				if (type == NDIlib_frame_type_e::NDIlib_frame_type_video) {
-
+				if (imageOpt.has_value()) {
 					lastVideoFrameTime = std::chrono::steady_clock::now();
-					// Convert the NDI frame to your desired format and store in currentFrame_
-					Image frame;
-					frame.width = video_frame.xres;
-					frame.height = video_frame.yres;
-					frame.channels = 4; // Assuming RGBA format
-
-					frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
-
-					NDIlib_recv_free_video_v2(pNDIInstance_, &video_frame);
+					const auto& frame = imageOpt.value();
 					if (!videoConnected) {
 						videoConnected = true;
 						if (_videoConnected) {
@@ -361,10 +351,80 @@ void NDIReceiver::generateFrames() {
 					}
 				}
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(m_synced ? 33 : 1));
 		}
 	}
 	catch (const std::exception& e) {
 		Logger::log_error("Could not generate frames", e.what());
 	}
+}
+
+
+NDIFrame NDIReceiver::getFrameNDI() {
+	NDIlib_video_frame_v2_t video_frame;
+	NDIlib_audio_frame_v2_t audio_frame;
+
+	std::lock_guard<std::mutex> lock(pndiMutex_);
+	auto type = NDIlib_recv_capture_v2(pNDIInstance_, &video_frame, &audio_frame, nullptr, 1000); // 5-second timeout
+
+	if (type == NDIlib_frame_type_e::NDIlib_frame_type_audio) {
+
+
+		// Process and convert the NDI audio frame to your Audio struct
+		Audio audio;
+		audio.sampleRate = audio_frame.sample_rate;
+		audio.channels = audio_frame.no_channels;
+		audio.noSamples = audio_frame.no_samples;
+		audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
+		audio.isNew = true;
+		NDIlib_recv_free_audio_v2(pNDIInstance_, &audio_frame);
+		return { audio, std::nullopt };
+	}
+	else if (type == NDIlib_frame_type_e::NDIlib_frame_type_video) {
+
+		Image frame;
+		frame.width = video_frame.xres;
+		frame.height = video_frame.yres;
+		frame.channels = 4; // Assuming RGBA format
+
+		frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
+		NDIlib_recv_free_video_v2(pNDIInstance_, &video_frame);
+
+		return { std::nullopt, frame };
+	}
+	return { std::nullopt, std::nullopt };
+}
+
+NDIFrame NDIReceiver::getFramesNDISynced() {
+    NDIlib_video_frame_v2_t video_frame;
+    NDIlib_audio_frame_v2_t audio_frame;
+	std::lock_guard<std::mutex> lock(pndiMutex_);
+    // Capture synced video frame
+    NDIlib_framesync_capture_video(_pndiFrameSync, &video_frame);
+    Image frame;
+    if (video_frame.p_data) {
+        frame.width = video_frame.xres;
+        frame.height = video_frame.yres;
+        frame.channels = 4; // Assuming RGBA format
+        frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
+        NDIlib_framesync_free_video(_pndiFrameSync, &video_frame);
+    }
+
+    // Capture synced audio frame
+    NDIlib_framesync_capture_audio(_pndiFrameSync, &audio_frame, 48000, 2, 2000);
+    Audio audio;
+    if (audio_frame.p_data) {
+        audio.sampleRate = audio_frame.sample_rate;
+        audio.channels = audio_frame.no_channels;
+        audio.noSamples = audio_frame.no_samples;
+        audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
+        audio.isNew = true;
+        NDIlib_framesync_free_audio(_pndiFrameSync, &audio_frame);
+    }
+
+    return { 
+        video_frame.p_data ? std::optional<Audio>{audio} : std::nullopt, 
+        audio_frame.p_data ? std::optional<Image>{frame} : std::nullopt 
+    };
 }
