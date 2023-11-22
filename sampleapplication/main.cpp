@@ -212,7 +212,7 @@ int main() {
                 audio.noSamples = 4000;
                 audio.sampleRate = 44100;
                 for (int i = 0; i < audio.noSamples * audio.channels; i++) {
-                    audio.data.push_back((i % 1024 - 1) / 256.0f);
+                    audio.data.push_back((i % 1024 - 5000) / 256.0f);
                 }
                 sender->feedAudio(audio);
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
