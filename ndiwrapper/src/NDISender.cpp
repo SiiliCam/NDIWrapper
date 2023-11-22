@@ -140,3 +140,41 @@ void NDISender::feedAudioAsync(Audio& audio) {
     // Detach the thread to allow it to run independently
     audioSendThread.detach();
 }
+
+void NDISender::feedAudio(Audio16& audio) {
+	if (!pNDIInstance_) {
+		Logger::log_error("Pndi send not initialized for audio");
+		return;
+	}
+
+	NDIlib_audio_frame_interleaved_16s_t NDI_audio_frame;
+	NDI_audio_frame.sample_rate = audio.sampleRate;
+	NDI_audio_frame.no_channels = audio.channels;
+	NDI_audio_frame.no_samples = audio.noSamples;
+	NDI_audio_frame.p_data = audio.data.data();
+
+	{
+		NDIlib_util_send_send_audio_interleaved_16s(pNDIInstance_, &NDI_audio_frame);
+	}
+}
+void NDISender::feedAudioAsync(Audio16& audio) {
+	if (!pNDIInstance_) {
+		Logger::log_error("Pndi send not initialized for audio");
+		return;
+	}
+
+	// Spawn a new thread to handle audio sending
+	std::thread audioSendThread([this, audio]() mutable {
+		NDIlib_audio_frame_interleaved_16s_t NDI_audio_frame;
+		NDI_audio_frame.sample_rate = audio.sampleRate;
+		NDI_audio_frame.no_channels = audio.channels;
+		NDI_audio_frame.no_samples = audio.noSamples;
+		NDI_audio_frame.p_data = audio.data.data();
+		{
+			NDIlib_util_send_send_audio_interleaved_16s(pNDIInstance_, &NDI_audio_frame);
+		}
+		});
+
+	// Detach the thread to allow it to run independently
+	audioSendThread.detach();
+}

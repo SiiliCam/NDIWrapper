@@ -40,9 +40,10 @@ public:
 	 */
 	void feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType = NDIlib_FourCC_video_type_NV12);
 	void feedAudio(Audio& audioFrame);
+	void feedAudio(Audio16& audio);
 	void asyncFeedFrame(const Image& image, NDIlib_FourCC_video_type_e videoType);
 	void feedAudioAsync(Audio& audio);
-
+	void feedAudioAsync(Audio16& audio);
 	void start();
 	void stop();
 
