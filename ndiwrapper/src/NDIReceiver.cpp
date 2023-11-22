@@ -293,7 +293,7 @@ void NDIReceiver::generateFrames() {
 				}
 				auto& [audioOpt, imageOpt] = frames;
 				if (audioOpt.has_value()) {
-					const auto& audio = audioOpt.value();
+					auto audio = audioOpt.value();
 					lastAudioFrameTime = std::chrono::steady_clock::now();
 					if (!audioConnected) {
 						audioConnected = true;
@@ -380,6 +380,7 @@ NDIFrame NDIReceiver::getFrameNDI() {
 		audio.noSamples = audio_frame.no_samples;
 		audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
 		audio.isNew = true;
+		audio.timestamp = audio_frame.timestamp;
 		NDIlib_recv_free_audio_v2(pNDIInstance_, &audio_frame);
 		return { audio, std::nullopt };
 	}
