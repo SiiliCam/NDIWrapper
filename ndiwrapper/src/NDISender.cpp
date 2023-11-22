@@ -67,7 +67,6 @@ void NDISender::feedFrame(Image& image, NDIlib_FourCC_video_type_e videoType) {
 	NDI_video_frame.line_stride_in_bytes = image.stride;
 
 	{
-		std::lock_guard<std::mutex> lock(pndiMutex_);
 		NDIlib_send_send_video_v2(pNDIInstance_, &NDI_video_frame);
 	}
 }
@@ -84,8 +83,9 @@ void NDISender::feedAudio(Audio& audio) {
 	NDI_audio_frame.p_data = audio.data.data(); // Point to the data in the vector
 	NDI_audio_frame.channel_stride_in_bytes = NDI_audio_frame.no_samples * sizeof(float);
 
-    NDIlib_send_send_audio_v2(pNDIInstance_, &NDI_audio_frame);
-
+	{
+		NDIlib_send_send_audio_v2(pNDIInstance_, &NDI_audio_frame);
+	}
 }
 
 void NDISender::asyncFeedFrame(const Image& image, NDIlib_FourCC_video_type_e videoType) {
@@ -110,8 +110,33 @@ void NDISender::asyncFeedFrame(const Image& image, NDIlib_FourCC_video_type_e vi
 	NDI_video_frame.line_stride_in_bytes = buffer.stride;
 
 	// Send the frame asynchronously
-	NDIlib_send_send_video_async_v2(pNDIInstance_, &NDI_video_frame);
-
+	{
+		NDIlib_send_send_video_async_v2(pNDIInstance_, &NDI_video_frame);
+	}
 	// Toggle the buffer for the next frame
 	m_currentBufferIndex = (m_currentBufferIndex + 1) % 2;
+}
+
+void NDISender::feedAudioAsync(Audio& audio) {
+    if (!pNDIInstance_) {
+        Logger::log_error("Pndi send not initialized for audio");
+        return;
+    }
+
+    // Spawn a new thread to handle audio sending
+    std::thread audioSendThread([this, audio]() {
+        NDIlib_audio_frame_v2_t NDI_audio_frame;
+        NDI_audio_frame.sample_rate = audio.sampleRate;
+        NDI_audio_frame.no_channels = audio.channels;
+        NDI_audio_frame.no_samples = audio.noSamples;
+        NDI_audio_frame.p_data = const_cast<float*>(audio.data.data()); // Point to the data in the vector
+        NDI_audio_frame.channel_stride_in_bytes = NDI_audio_frame.no_samples * sizeof(float);
+
+        {
+            NDIlib_send_send_audio_v2(pNDIInstance_, &NDI_audio_frame);
+        }
+    });
+
+    // Detach the thread to allow it to run independently
+    audioSendThread.detach();
 }
