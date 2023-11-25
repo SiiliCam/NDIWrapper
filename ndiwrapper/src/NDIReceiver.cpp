@@ -390,7 +390,7 @@ NDIFrame NDIReceiver::getFrameNDI() {
 		frame.width = video_frame.xres;
 		frame.height = video_frame.yres;
 		frame.channels = 4; // Assuming RGBA format
-
+		frame.timestamp = video_frame.timestamp;
 		frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
 		NDIlib_recv_free_video_v2(pNDIInstance_, &video_frame);
 		return { std::nullopt, frame };
