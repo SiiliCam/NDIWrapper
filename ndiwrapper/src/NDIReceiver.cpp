@@ -122,7 +122,8 @@ void NDIReceiver::stop() {
 	stopMetadataListening();
 	stopSourceFinding();
 	stopFrameGeneration();
-
+	audioAvailable_ = true;
+	audioCondition_.notify_all();
 	std::lock_guard<std::mutex> lock(pndiMutex_);
 	if (pNDIInstance_) {
 		NDIlib_recv_destroy(pNDIInstance_);
@@ -323,6 +324,7 @@ void NDIReceiver::generateFrames() {
 						audioAvailable_ = true;
 						audioCondition_.notify_one();
 						_audioDisconnected();
+						lastAudioFrameTime = std::chrono::steady_clock::now(); // to make sure we everytime notify
 					}
 				}
 				if (imageOpt.has_value()) {
