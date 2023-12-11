@@ -122,7 +122,8 @@ void NDIReceiver::stop() {
 	stopMetadataListening();
 	stopSourceFinding();
 	stopFrameGeneration();
-
+	audioAvailable_ = true;
+	audioCondition_.notify_all();
 	std::lock_guard<std::mutex> lock(pndiMutex_);
 	if (pNDIInstance_) {
 		NDIlib_recv_destroy(pNDIInstance_);
@@ -323,6 +324,7 @@ void NDIReceiver::generateFrames() {
 						audioAvailable_ = true;
 						audioCondition_.notify_one();
 						_audioDisconnected();
+						lastAudioFrameTime = std::chrono::steady_clock::now(); // to make sure we everytime notify
 					}
 				}
 				if (imageOpt.has_value()) {
@@ -370,6 +372,7 @@ NDIFrame NDIReceiver::getFrameNDI() {
 
 	std::lock_guard<std::mutex> lock(pndiMutex_);
 	auto type = NDIlib_recv_capture_v2(pNDIInstance_, &video_frame, &audio_frame, nullptr, 1000); // 5-second timeout
+
 	if (type == NDIlib_frame_type_e::NDIlib_frame_type_audio) {
 
 
@@ -380,7 +383,7 @@ NDIFrame NDIReceiver::getFrameNDI() {
 		audio.noSamples = audio_frame.no_samples;
 		audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
 		audio.isNew = true;
-		audio.timestamp = audio_frame.timestamp;
+		audio.timestamp = audio_frame.timestamp*100;
 		NDIlib_recv_free_audio_v2(pNDIInstance_, &audio_frame);
 		return { audio, std::nullopt };
 	}
@@ -390,7 +393,7 @@ NDIFrame NDIReceiver::getFrameNDI() {
 		frame.width = video_frame.xres;
 		frame.height = video_frame.yres;
 		frame.channels = 4; // Assuming RGBA format
-		frame.timestamp = video_frame.timestamp;
+		frame.timestamp = video_frame.timestamp*100;
 		frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
 		NDIlib_recv_free_video_v2(pNDIInstance_, &video_frame);
 		return { std::nullopt, frame };
