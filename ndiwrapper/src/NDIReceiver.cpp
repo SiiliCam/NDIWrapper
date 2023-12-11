@@ -21,7 +21,8 @@ NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup, bool sy
 	currentOutput_(),
 	groupToFind_(groupToFind),
 	_pndiFrameSync(nullptr),
-    m_synced(synced) {
+    m_synced(synced),
+	dontTryToSetSource_(false){
 	// Initialization code, if any
 	Logger::init_logging("C:/Users/Simo/AppData/Roaming/log2.log");
 	currentOutput_.p_ndi_name = "";
@@ -149,15 +150,19 @@ void NDIReceiver::setVideoDisconnectedCallback(ConnectionCallback callback) {
 }
 
 bool NDIReceiver::setOutput(const std::string& outputName) {
+	std::lock_guard<std::mutex> lock(setOutputMutex_);
 	Logger::log_info("setting output to", outputName);
 	try {
+		dontTryToSetSource_ = true;
 		if (outputName == std::string(currentOutput_.p_ndi_name)) {
 			Logger::log_info("output is the same as current, doing nothing");
+			dontTryToSetSource_ = false;
 			return false;
 		}
 		std::unique_lock<std::mutex> sourceLock(sourceMutex_);
 		currentOutputString_ = outputName;
 		decltype(ndiSources_.at(outputName)) ndisource = ndiSources_.at(outputName);
+		isSourceSet_ = false;
 		currentOutput_ = ndisource;
 
 		sourceLock.unlock();
@@ -180,10 +185,12 @@ bool NDIReceiver::setOutput(const std::string& outputName) {
 		}
 		Logger::log_info("created connection");
 		isSourceSet_ = true;
+		dontTryToSetSource_ = false;
 	}
 	catch (const std::exception& e) {
 		Logger::log_error("could not set currentOutput_: {}", e.what());
 		isSourceSet_ = false;
+		dontTryToSetSource_ = false;
 		return false;
 	}
 	Logger::log_info("output set", outputName);
@@ -271,16 +278,34 @@ void NDIReceiver::generateFrames() {
 	bool videoConnected = false;
 	bool audioConnected = false;
 
+	common_types::Image blankFrame;
+	blankFrame.width = 400;
+	blankFrame.height = 400;
+	blankFrame.channels = 4;
+	blankFrame.data = std::vector<uint8_t>(blankFrame.width * blankFrame.height * blankFrame.channels, 0); // Fill with zeros for a blank frame
+	blankFrame.stride = blankFrame.width * blankFrame.channels; // Assuming no padding
 
 	try {
 		while (isReceivingRunning_.load()) {
 			int waitTimeMs = 33;
 			// Check if the selected source has changed
-			if (!isSourceSet_.load()) {
-				if (!setOutput(currentOutputString_)) {
-					std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS * 10));
-					continue;
+			if (dontTryToSetSource_.load()) {
+				{
+					std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
+					for (const auto& callback : _frameCallbacks) {
+						threadPool_.enqueue([=]() {
+							callback(blankFrame);
+							});
+					}
 				}
+
+				std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS));
+				continue;
+			}
+			if (!isSourceSet_.load()) {
+				setOutput(currentOutputString_);
+				std::this_thread::sleep_for(std::chrono::milliseconds(sleeptimeMS * 10));
+				continue;
 			}
 			// Capture video frames from the receiver
 			{

@@ -227,5 +227,8 @@ private:
 
 	NDIlib_framesync_instance_t _pndiFrameSync;
 	bool m_synced;
+
+	std::atomic<bool> dontTryToSetSource_;
+	std::mutex setOutputMutex_;
 };
 
