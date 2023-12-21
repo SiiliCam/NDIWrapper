@@ -23,7 +23,6 @@ NDIReceiver::NDIReceiver(const std::string& groupToFind, bool findGroup, bool sy
 	_pndiFrameSync(nullptr),
     m_synced(synced) {
 	// Initialization code, if any
-	Logger::init_logging("C:/Users/Simo/AppData/Roaming/log2.log");
 	currentOutput_.p_ndi_name = "";
 
 }
