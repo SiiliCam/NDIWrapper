@@ -79,13 +79,13 @@ Image generateRGBAImage(int width, int height, uint8_t r, uint8_t g, uint8_t b) 
 int main() {
 
 	NDIReceiver receiver("Testing", true, true);
-
+    Logger::Logger::getInstance().init_logging("log.txt");
 	// sets the found source as current
 	receiver.addNDISourceCallback([&receiver](std::string source) -> void {
 		Logger::log_info("found source", source);
 		});
 	receiver.start();
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     receiver.addMetadataCallback([](MetadataContainer container) -> void {
         if (container.zoom.has_value()) {
             Logger::log_info("RECEIVER got zoom : ", container.zoom.value());
