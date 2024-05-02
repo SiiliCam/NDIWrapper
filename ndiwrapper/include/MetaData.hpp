@@ -24,11 +24,21 @@ struct AspectRatio {
 	int64_t height;
 };
 
+struct AccelerometerData {
+    float x, y, z;
+};
+
+struct GyroscopeData {
+    float x, y, z;
+};
+
 struct MetadataContainer {
-	std::optional<BoundingBox> boundingBox;
-	std::optional<Zoom> zoom;
-	std::optional<SwitchCamera> switchCamera;
-	std::optional<AspectRatio> aspectRatio;
+    std::optional<BoundingBox> boundingBox;
+    std::optional<Zoom> zoom;
+    std::optional<SwitchCamera> switchCamera;
+    std::optional<AspectRatio> aspectRatio;
+    std::optional<AccelerometerData> accelerometerData;
+    std::optional<GyroscopeData> gyroscopeData;
 };
 
 
@@ -69,6 +79,23 @@ namespace Metadata {
         auto element = doc.NewElement("AspectRatio");
         element->SetAttribute("width", aspectRatio.width);
         element->SetAttribute("height", aspectRatio.height);
+        root->InsertEndChild(element);
+    }
+
+    template<>
+    inline void addToXML<AccelerometerData>(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* root, const AccelerometerData& data) {
+        auto element = doc.NewElement("AccelerometerData");
+        element->SetAttribute("x", data.x);
+        element->SetAttribute("y", data.y);
+        element->SetAttribute("z", data.z);
+        root->InsertEndChild(element);
+    }
+    template<>
+    inline void addToXML<GyroscopeData>(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* root, const GyroscopeData& data) {
+        auto element = doc.NewElement("GyroscopeData");
+        element->SetAttribute("x", data.x);
+        element->SetAttribute("y", data.y);
+        element->SetAttribute("z", data.z);
         root->InsertEndChild(element);
     }
 
@@ -121,6 +148,23 @@ namespace Metadata {
                 ar.width = aspectRatioElement->IntAttribute("width");
                 ar.height = aspectRatioElement->IntAttribute("height");
                 container.aspectRatio = ar;
+            }
+            auto accElement = root->FirstChildElement("AccelerometerData");
+            if (accElement) {
+                AccelerometerData accData;
+                accData.x = accElement->FloatAttribute("x");
+                accData.y = accElement->FloatAttribute("y");
+                accData.z = accElement->FloatAttribute("z");
+                container.accelerometerData = accData;
+            }
+
+            auto gyroElement = root->FirstChildElement("GyroscopeData");
+            if (gyroElement) {
+                GyroscopeData gyroData;
+                gyroData.x = gyroElement->FloatAttribute("x");
+                gyroData.y = gyroElement->FloatAttribute("y");
+                gyroData.z = gyroElement->FloatAttribute("z");
+                container.gyroscopeData = gyroData;
             }
         }
 
