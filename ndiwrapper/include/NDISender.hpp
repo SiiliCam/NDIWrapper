@@ -42,6 +42,9 @@ public:
 	void feedAudio(Audio& audioFrame);
 	void feedAudio(Audio16& audio);
 	void asyncFeedFrame(Image& image, NDIlib_FourCC_video_type_e videoType);
+
+	// you must handle yourself the metadata correctly
+	void asyncFeedFrame(Image& image, NDIlib_FourCC_video_type_e videoType, std::string metadata);
 	void feedAudioAsync(Audio& audio);
 	void feedAudioAsync(Audio16& audio);
 	void start();

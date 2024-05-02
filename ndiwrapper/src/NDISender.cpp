@@ -123,6 +123,45 @@ void NDISender::asyncFeedFrame(Image& image, NDIlib_FourCC_video_type_e videoTyp
 	}
 }
 
+void NDISender::asyncFeedFrame(Image& image, NDIlib_FourCC_video_type_e videoType, std::string metadata) {
+	
+	if (!pNDIInstance_) {
+		Logger::log_error("Pndi send not initialized");
+		return;
+	}
+
+	int bufferIndex;
+	{
+		// Lock the buffer for writing
+		std::lock_guard<std::mutex> lock(m_bufferMutex);
+
+		// Swap the image with the current buffer to avoid deep copy
+		std::swap(m_frameBuffers[m_currentBufferIndex], image);
+
+		// Use the current buffer index for NDI frame preparation
+		bufferIndex = m_currentBufferIndex;
+
+		// Toggle the buffer index for the next frame
+		m_currentBufferIndex = (m_currentBufferIndex + 1) % m_frameBuffers.size();
+	} // Mutex is unlocked here
+
+	// Prepare the NDI video frame with the current buffer
+	auto& buffer = m_frameBuffers[bufferIndex];
+	NDIlib_video_frame_v2_t NDI_video_frame;
+	NDI_video_frame.xres = buffer.width;
+	NDI_video_frame.yres = buffer.height;
+	NDI_video_frame.FourCC = videoType;
+	NDI_video_frame.p_data = buffer.data.data();
+	NDI_video_frame.line_stride_in_bytes = buffer.stride;
+	
+	NDI_video_frame.p_metadata = strdup(metadata.c_str());
+
+	// Send the frame asynchronously
+	{
+		NDIlib_send_send_video_async_v2(pNDIInstance_, &NDI_video_frame);
+	}
+}
+
 void NDISender::feedAudioAsync(Audio& audio) {
     if (!pNDIInstance_) {
         Logger::log_error("Pndi send not initialized for audio");
