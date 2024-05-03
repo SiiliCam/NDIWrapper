@@ -59,6 +59,10 @@ void NDIReceiver::addFrameCallback(FrameCallback frameCallback) {
 	std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
 	_frameCallbacks.push_back(frameCallback);
 }
+void NDIReceiver::addFrameWithMetadataCallback(FrameWithMetadataCallback frameCallback) {
+	std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
+	_frameWithMetadataCallbacks.push_back(frameCallback);
+}
 
 void NDIReceiver::addNDISourceCallback(NDISourceCallback sourceCallback) {
 	std::lock_guard<std::mutex> lock(ndiSourceCallbackMutex_);
@@ -323,12 +327,12 @@ void NDIReceiver::generateFrames() {
 					if (!audioConnected) {
 						audioConnected = true;
 						if (_audioConnected) {
-							_audioConnected(audio);
+							_audioConnected(audio.data);
 						}
 					}
 					{
 						std::lock_guard<std::mutex> lock(audioMutex_);
-						currentAudio_ = audio;
+						currentAudio_ = audio.data;
 						audioAvailable_ = true;
 					}
 					audioCondition_.notify_one();
@@ -337,7 +341,7 @@ void NDIReceiver::generateFrames() {
 						std::lock_guard<std::mutex> lock(audioCallbackVecMutex_);
 						for (const auto& callback : _audioCallbacks) {
 							threadPool_.enqueue([=]() {
-								callback(audio);
+								callback(audio.data);
 								});
 						}
 					}
@@ -357,16 +361,24 @@ void NDIReceiver::generateFrames() {
 					if (!videoConnected) {
 						videoConnected = true;
 						if (_videoConnected) {
-							_videoConnected(frame);
+							_videoConnected(frame.data);
 						}
 					}
 					{
 						std::lock_guard<std::mutex> lock(frameMutex_);
-						currentFrame_ = frame;
+						currentFrame_ = frame.data;
 					}
 					{
 						std::lock_guard<std::mutex> lock(frameCallbackVecMutex_);
 						for (const auto& callback : _frameCallbacks) {
+							threadPool_.enqueue([=]() {
+								callback(frame.data);
+								});
+						}
+					}
+					{
+						std::lock_guard<std::mutex> lock(frameCallbackVecMutexMetadata_);
+						for (const auto& callback : _frameWithMetadataCallbacks) {
 							threadPool_.enqueue([=]() {
 								callback(frame);
 								});
@@ -401,26 +413,38 @@ NDIFrame NDIReceiver::getFrameNDI() {
 
 
 		// Process and convert the NDI audio frame to your Audio struct
-		Audio audio;
-		audio.sampleRate = audio_frame.sample_rate;
-		audio.channels = audio_frame.no_channels;
-		audio.noSamples = audio_frame.no_samples;
-		audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
-		audio.isNew = true;
-		audio.timestamp = audio_frame.timestamp*100;
+		DataWithMetadata<Audio> fullframe;
+		fullframe.data.sampleRate = audio_frame.sample_rate;
+		fullframe.data.channels = audio_frame.no_channels;
+		fullframe.data.noSamples = audio_frame.no_samples;
+		fullframe.data.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
+		fullframe.data.isNew = true;
+		fullframe.data.timestamp = audio_frame.timestamp*100;
 		NDIlib_recv_free_audio_v2(pNDIInstance_, &audio_frame);
-		return { audio, std::nullopt };
+		return { fullframe, std::nullopt };
 	}
 	else if (type == NDIlib_frame_type_e::NDIlib_frame_type_video) {
-
-		Image frame;
-		frame.width = video_frame.xres;
-		frame.height = video_frame.yres;
-		frame.channels = 4; // Assuming RGBA format
-		frame.timestamp = video_frame.timestamp*100;
-		frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
+		DataWithMetadata<Image> fullframe;
+		fullframe.data.width = video_frame.xres;
+		fullframe.data.height = video_frame.yres;
+		fullframe.data.channels = 4; // Assuming RGBA format
+		fullframe.data.timestamp = video_frame.timestamp*100;
+		fullframe.data.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * fullframe.data.channels);
+		
+		if (video_frame.p_metadata) {
+			fullframe.metadata = Metadata::decode(video_frame.p_metadata);
+			/*auto container  = Metadata::decode(video_frame.p_metadata);
+			if (container.accelerometerData.has_value()) {
+				const auto& accelData = container.accelerometerData.value();
+				Logger::log_info("accel x", std::to_string(accelData.x), ", accel y:", std::to_string(accelData.y), ", accel z", std::to_string(accelData.z));
+			}
+			if (container.gyroscopeData.has_value()) {
+				const auto& gyroData = container.gyroscopeData.value();
+				Logger::log_info("gyro x", std::to_string(gyroData.x), ", gyro y:", std::to_string(gyroData.y), ", gyro z", std::to_string(gyroData.z));
+			}*/
+		}
 		NDIlib_recv_free_video_v2(pNDIInstance_, &video_frame);
-		return { std::nullopt, frame };
+		return { std::nullopt, fullframe };
 	}
 	return { std::nullopt, std::nullopt };
 }
@@ -433,30 +457,42 @@ NDIFrame NDIReceiver::getFramesNDISynced() {
 
 	// Capture synced audio frame
 	NDIlib_framesync_capture_audio(_pndiFrameSync, &audio_frame, 48000, 2, 800);
-	Audio audio;
+	DataWithMetadata<Audio> fullAudioFrame;
 	if (audio_frame.p_data) {
-		audio.sampleRate = audio_frame.sample_rate;
-		audio.channels = audio_frame.no_channels;
-		audio.noSamples = audio_frame.no_samples;
-		audio.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
-		audio.isNew = true;
+		fullAudioFrame.data.sampleRate = audio_frame.sample_rate;
+		fullAudioFrame.data.channels = audio_frame.no_channels;
+		fullAudioFrame.data.noSamples = audio_frame.no_samples;
+		fullAudioFrame.data.data.assign(audio_frame.p_data, audio_frame.p_data + audio_frame.no_samples * audio_frame.no_channels);
+		fullAudioFrame.data.isNew = true;
 		NDIlib_framesync_free_audio(_pndiFrameSync, &audio_frame);
 	}
 
 
     // Capture synced video frame
     NDIlib_framesync_capture_video(_pndiFrameSync, &video_frame);
-    Image frame;
+	DataWithMetadata<Image> fullImageFrame;
     if (video_frame.p_data) {
-        frame.width = video_frame.xres;
-        frame.height = video_frame.yres;
-        frame.channels = 4; // Assuming RGBA format
-        frame.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * frame.channels);
+		fullImageFrame.data.width = video_frame.xres;
+		fullImageFrame.data.height = video_frame.yres;
+		fullImageFrame.data.channels = 4; // Assuming RGBA format
+		fullImageFrame.data.data.assign(video_frame.p_data, video_frame.p_data + video_frame.xres * video_frame.yres * fullImageFrame.data.channels);
+		if (video_frame.p_metadata) {
+			MetadataContainer container = Metadata::decode(video_frame.p_metadata);
+
+			if (container.accelerometerData.has_value()) {
+				const auto& accelData = container.accelerometerData.value();
+				Logger::log_info("accel x", std::to_string(accelData.x), ", accel y:", std::to_string(accelData.y), ", accel z", std::to_string(accelData.z));
+			}
+			if (container.gyroscopeData.has_value()) {
+				const auto& gyroData = container.gyroscopeData.value();
+				Logger::log_info("gyro x", std::to_string(gyroData.x), ", gyro y:", std::to_string(gyroData.y), ", gyro z", std::to_string(gyroData.z));
+			}
+		}
         NDIlib_framesync_free_video(_pndiFrameSync, &video_frame);
     }
 
     return { 
-        audio_frame.p_data ? std::optional<Audio>{audio} : std::nullopt, 
-        video_frame.p_data ? std::optional<Image>{frame} : std::nullopt 
+        audio_frame.p_data ? std::optional<DataWithMetadata<Audio>>{fullAudioFrame} : std::nullopt,
+        video_frame.p_data ? std::optional<DataWithMetadata<Image>>{fullImageFrame} : std::nullopt
     };
 }

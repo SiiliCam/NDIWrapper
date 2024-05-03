@@ -12,6 +12,7 @@
 #include "commontypes.hpp"
 #include "ThreadPool.hpp"
 #include "MetaData.hpp"
+#include "AugmentedTypes.hpp"
 #include "Logger.hpp"
 
 #include "NDIBase.hpp"
@@ -21,12 +22,13 @@ using namespace common_types;
 using FrameCallback = std::function<void(Image)>;
 using NDISourceCallback = std::function<void(std::string)>;
 using AudioCallback = std::function<void(Audio)>;
+using FrameWithMetadataCallback = std::function<void(DataWithMetadata<Image>)>;
 
 using ConnectionCallback = std::function<void()>;
 using ConnectionCallbackAudio = std::function<void(Audio)>;
 using ConnectionCallbackVideo = std::function<void(Image)>;
 
-using NDIFrame = std::pair<std::optional<Audio>, std::optional<Image>>;
+using NDIFrame = std::pair<std::optional<DataWithMetadata<Audio>>, std::optional<DataWithMetadata<Image>>>;
 /**
  * @brief the receiver implementation, for sources and frames there is callbacks when new one comes
  * @details this listens to new ndi sources, metadata (because of base) and frames
@@ -122,7 +124,7 @@ public:
 	 * The frames are hard coded to be RGBA images
 	 */
 	void addFrameCallback(FrameCallback frameCallback);
-
+	void addFrameWithMetadataCallback(FrameWithMetadataCallback frameCallback);
 	/**
 	 * @brief adds a callback which gets called each time a audio comes in
 	 * @param[in] audioCallback the audio callback which gets called
@@ -211,6 +213,7 @@ private:
 	std::vector<FrameCallback> _frameCallbacks;
 	std::vector<NDISourceCallback> _ndiSourceCallbacks;
 	std::vector<AudioCallback> _audioCallbacks;
+	std::vector<FrameWithMetadataCallback> _frameWithMetadataCallbacks;
 
 	ConnectionCallbackAudio _audioConnected;
 	ConnectionCallback _audioDisconnected;
@@ -219,6 +222,7 @@ private:
 	ConnectionCallback _videoDisconnected;
 
 	std::mutex frameCallbackVecMutex_;
+	std::mutex frameCallbackVecMutexMetadata_; // for sensor data currently
 	std::mutex ndiSourceCallbackMutex_;
 	std::mutex audioCallbackVecMutex_;
 
