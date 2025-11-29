@@ -12,7 +12,6 @@ target_link_libraries(NDIWrapper
         ${CMAKE_THREAD_LIBS_INIT} 
         Logger 
         CommonTypes
-        ${NDI_LIBRARY}
         tinyxml2
 )
 
