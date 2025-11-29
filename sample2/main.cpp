@@ -87,14 +87,39 @@ int main() {
     Logger::log_error("NDI DLL already loaded BEFORE env var set!");
   }
 
-  _putenv_s("NDI_CONFIG_DIR", "C:\\Users\\Simo\\AppData\\Roaming\\siili3");
-  NDIReceiver receiver("", false, true);
-  // sets the found source as current
-  receiver.addNDISourceCallback([&receiver](std::string source) -> void {
-    Logger::log_info("found source", source);
-  });
-  receiver.start();
-  std::this_thread::sleep_for(std::chrono::seconds(5));
+  {
+
+    _putenv_s("NDI_CONFIG_DIR", "C:\\Users\\Simo\\AppData\\Roaming\\siili3");
+    NDIReceiver receiver("", false, true);
+    // sets the found source as current
+    receiver.addNDISourceCallback([&receiver](std::string source) -> void {
+      Logger::log_info("found source", source);
+    });
+    receiver.start();
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
+  {
+
+    _putenv("NDI_CONFIG_DIR=");
+    NDIReceiver receiver("", false, true);
+    // sets the found source as current
+    receiver.addNDISourceCallback([&receiver](std::string source) -> void {
+      Logger::log_info("found source", source);
+    });
+    receiver.start();
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
+  {
+
+    _putenv_s("NDI_CONFIG_DIR", "C:\\Users\\Simo\\AppData\\Roaming\\siili3");
+    NDIReceiver receiver("", false, true);
+    // sets the found source as current
+    receiver.addNDISourceCallback([&receiver](std::string source) -> void {
+      Logger::log_info("found source", source);
+    });
+    receiver.start();
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
 
   auto sender = std::make_shared<NDISender>("vitunnisti", "");
   std::thread senderThread([&]() {

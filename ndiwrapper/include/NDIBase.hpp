@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Logger.hpp"
-#include <Processing.NDI.DynamicLoad.h>
+#include <NDILibraryManager.hpp>
 #include <Processing.NDI.Lib.h>
 #include <atomic>
 #include <functional>
@@ -128,23 +128,6 @@ void NDIBase<NDIInstanceType>::sendMetadata(const Args &...args) {
   delete[] metadata.p_data;
 }
 
-static const NDIlib_v6 *GetNDILib() {
-  static const NDIlib_v6 *lib = []() {
-#ifdef _WIN32
-    HMODULE hNDI = LoadLibraryA("Processing.NDI.Lib.x64.dll");
-    auto load_fn =
-        (const NDIlib_v6 *(*)(void))GetProcAddress(hNDI, "NDIlib_v6_load");
-#else
-    void *hNDI = dlopen("libndi.so.6", RTLD_NOW);
-    auto load_fn = (const NDIlib_v6 *(*)(void))dlsym(hNDI, "NDIlib_v6_load");
-#endif
-    if (!load_fn)
-      return (const NDIlib_v6 *)nullptr;
-    return load_fn();
-  }();
-  return lib;
-}
-
 template <typename NDIInstanceType>
 NDIBase<NDIInstanceType>::NDIBase(CaptureMetadataFunc capture,
                                   MetadataFunc send, MetadataFunc free)
@@ -158,11 +141,10 @@ NDIBase<NDIInstanceType>::NDIBase(CaptureMetadataFunc capture,
     Logger::log_info("NDI_CONFIG_DIR IS NOT SET IN NDIBASE");
   }
 
-  lib = GetNDILib();
-  lib->initialize();
+  lib = NDILibraryManager::Acquire(); // Loads + initializes if first
 }
 template <typename NDIInstanceType> NDIBase<NDIInstanceType>::~NDIBase() {
-  lib->destroy();
+  NDILibraryManager::Release();
 }
 
 template <typename NDIInstanceType>
