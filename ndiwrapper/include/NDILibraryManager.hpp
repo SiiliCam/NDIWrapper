@@ -22,7 +22,7 @@ public:
       auto load_fn =
           (const NDIlib_v6 *(*)(void))GetProcAddress(hNDI_, "NDIlib_v6_load");
 #else
-      hNDI_ = dlopen("libndi.so.6", RTLD_NOW);
+      hNDI_ = dlopen("libndi.so", RTLD_NOW);
       auto load_fn = (const NDIlib_v6 *(*)(void))dlsym(hNDI_, "NDIlib_v6_load");
 #endif
       if (!load_fn) {
