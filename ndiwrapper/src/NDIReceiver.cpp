@@ -206,6 +206,7 @@ void NDIReceiver::updateSources() {
       std::vector<std::string> newSources;
       NDIlib_find_create_t NDI_find_create_desc; /* Use defaults */
       if (_findGroup.load()) {
+        Logger::log_info("using groups: ", groupToFind_);
         NDI_find_create_desc.p_groups = groupToFind_.c_str();
       }
       NDIlib_find_instance_t pNDI_find =
